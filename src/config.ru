@@ -18,5 +18,6 @@ if ENV['DEBUG'] == "true"
   puts "DEBUG MODE"
 end
 BACKUPS_DIR = ENV['DEBUG'].nil? ? '/backups' : './backups'
+puts "All backups will be stored in #{BACKUPS_DIR}"
 Thread.new { system("/bin/bash #{Dir.pwd}/backup#{ENV['DEBUG'].nil? ? '' : '_debug'}.sh") }
 run Sinatra::Application

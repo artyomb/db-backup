@@ -58,12 +58,18 @@ def extract_backups_dir_structure
 end
 
 def extract_sql_by_backup(backup_path)
-  gz_path = File.join(BACKUPS_DIR, backup_path)
-  sql_content = nil
+  puts "Extracting SQL content from backup: #{backup_path}"
+  begin
+    gz_path = File.join(BACKUPS_DIR, backup_path)
+    sql_content = nil
 
-  Zlib::GzipReader.open(gz_path) do |gz|
-    sql_content = gz.read
+    Zlib::GzipReader.open(gz_path) do |gz|
+      sql_content = gz.read
+    end
+    puts "SQL content extracted successfully."
+    return sql_content
+  rescue Exception => e
+    puts "Error extracting SQL content: #{e}"
+    return nil
   end
-
-  sql_content
 end

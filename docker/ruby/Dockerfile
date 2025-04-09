@@ -1,8 +1,14 @@
 FROM ruby:3.3.1-slim-bookworm AS base
 
-RUN apt update && apt --fix-missing install -y build-essential pkg-config bash curl libpq-dev openssh-client postgresql-client  \
-     libpq-dev libsqlite3-dev libssl-dev libgeos-dev jq\
-     && rm -rf /var/lib/apt/lists/*
+RUN apt update && apt install -y curl gnupg2 lsb-release \
+ && echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+ && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql.gpg \
+ && echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+ && apt update \
+ && apt install -y postgresql-client \
+    build-essential pkg-config bash libpq-dev openssh-client \
+    libsqlite3-dev libssl-dev libgeos-dev jq \
+ && rm -rf /var/lib/apt/lists/*
 
 RUN echo 'gem: --no-document' >> ~/.gemrc
 
@@ -14,9 +20,15 @@ RUN bundle install --jobs $(nproc) --retry=3 && \
     bundle clean --force && rm -rf /usr/local/bundle/cache/*
 
 FROM ruby:3.3.1-slim-bookworm AS deploy
-RUN apt update && apt install --fix-missing -y bash curl libpq-dev openssh-client postgresql-client \
-      libpq-dev sqlite3 libssl-dev libgeos-dev jq\
-     && rm -rf /var/lib/apt/lists/*
+RUN apt update && apt install -y curl gnupg2 lsb-release \
+ && echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+ && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql.gpg \
+ && echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+ && apt update \
+ && apt install -y postgresql-client \
+    build-essential pkg-config bash libpq-dev openssh-client \
+    libsqlite3-dev libssl-dev libgeos-dev jq \
+ && rm -rf /var/lib/apt/lists/*
 
 COPY --from=base /usr/local/bundle /usr/local/bundle
 COPY . /app
