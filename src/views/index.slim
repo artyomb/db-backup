@@ -18,7 +18,27 @@ javascript:
         const fileViewArea = document.getElementById("file-area");
 
         document.querySelectorAll(".file-element").forEach(function(fileElement) {
-            fileElement.addEventListener("click", async function () {
+            fileElement.addEventListener("click", async function (event) {
+                if (event.target.classList.contains('download-icon')) {
+                    event.stopPropagation();
+                    const url = eval(fileElement.dataset.href);
+                    try {
+                        const response = await fetch(url);
+                        const blob = await response.blob();
+                        const downloadUrl = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = downloadUrl;
+                        a.download = eval(fileElement.dataset.href).split('/').pop();
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(downloadUrl);
+                    } catch (error) {
+                        console.error("Error downloading file:", error);
+                    }
+                    return;
+                }
+
                 console.log("Clicked on file element with data-href:", fileElement.dataset.href);
                 const url = eval(fileElement.dataset.href);
                 try {
@@ -36,6 +56,7 @@ javascript:
                 }
             });
         });
+
     });
 sass:
   .hdr-container
@@ -58,6 +79,7 @@ sass:
       &:hover
         background-color: #f0f0f0
     .file-element
+      padding-top: 0.2rem
       &:hover
         cursor: pointer
         background-color: #f0f0f0
@@ -97,6 +119,28 @@ sass:
   .width-half
     width: 50% !important
 
+  .download-icon
+    display: inline-block
+    margin-right: 0.5rem
+    padding: 0.15rem 0.3rem
+    border-radius: 0.3rem
+    background-color: #4CAF50
+    color: white
+    text-decoration: none
+    transition: all 0.3s ease
+    cursor: pointer
+    font-size: 0.9rem
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1)
+
+    &:hover
+      background-color: #45a049
+      transform: translateY(-1px)
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15)
+
+    &:active
+      transform: translateY(1px)
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1)
+
 h1 DB Backups directory
 h3.margin-remove-top= "Total size: #{represent_size(structure[:size])}"
 .content-container
@@ -123,6 +167,7 @@ h3.margin-remove-top= "Total size: #{represent_size(structure[:size])}"
             - current_path = "#{parent_path}/#{name}"
             - current_id = "node_#{parent_id}_#{counter}"
             .file-element data-href="'/file-in-archive/#{parent_path}/#{name}'"
+              span.download-icon data-href="'/download-dump-archive/#{parent_path}/#{name}'"= "⬇️"
               span uk-icon="icon: file-text"
               = " #{name}"
               span.float-right #{represent_size(content[:size])}

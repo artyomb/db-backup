@@ -14,6 +14,12 @@ get '/file-in-archive/*' do
   escaped_content = CGI.escapeHTML(content)
   "<code class='language-#{extention}'>#{escaped_content}</code>"
 end
+
+get '/download-dump-archive/*' do
+  path_to_file = params[:splat][0]
+  send_file(File.join(BACKUPS_DIR, path_to_file))
+end
+
 if ENV['DEBUG'] == "true"
   puts "DEBUG MODE"
 end
