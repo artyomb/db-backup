@@ -59,6 +59,7 @@ end
 
 def extract_sql_by_backup(backup_path)
   puts "Extracting SQL content from backup: #{backup_path}"
+  upper_limit = 100000
   begin
     gz_path = File.join(BACKUPS_DIR, backup_path)
     sql_content = nil
@@ -67,7 +68,7 @@ def extract_sql_by_backup(backup_path)
       sql_content = gz.read
     end
     puts "SQL content extracted successfully."
-    return sql_content
+    return sql_content[0..(upper_limit-1)] + "\n#{'*' * 150}\nYour content size is too big: #{sql_content.size} chars. It was reduced to #{upper_limit} characters\n#{'*' * 150}" if sql_content.length > upper_limit
   rescue Exception => e
     puts "Error extracting SQL content: #{e}"
     return nil
