@@ -1,19 +1,148 @@
+sass:
+  li
+    list-style: none
+  ul
+    list-style: none
+
 ruby:
+  require_relative '../utils/common_utils'
+  structure ||= begin
+                  puts "Extracting backups structure..."
+                  extract_backups_dir_structure
+                rescue Exception => e
+                  error_message = "Error when extracting backups structure:\n#{e}"
+                  nil
+                end
+javascript:
+    document.addEventListener("DOMContentLoaded", function() {
+        const fileViewArea = document.getElementById("file-area");
 
-h1 DB Backups
+        document.querySelectorAll(".file-element").forEach(function(fileElement) {
+            fileElement.addEventListener("click", async function () {
+                console.log("Clicked on file element with data-href:", fileElement.dataset.href);
+                const url = eval(fileElement.dataset.href);
+                try {
+                    const response = await fetch(url);
+                    const htmlContent = await response.text();
+                    fileViewArea.style.opacity = 1;
+                    fileViewArea.innerHTML = htmlContent;
+                    fileViewArea.style.textAlign = "left";
+                    document.querySelector(".chosen")?.classList.toggle("chosen");
+                    fileElement.classList.toggle("chosen");
+                    hljs.highlightElement(fileViewArea.querySelector("code"));
+                } catch (error) {
+                    console.error("Error loading file content:", error);
+                    fileViewArea.innerHTML = "Error loading file content";
+                }
+            });
+        });
+    });
+sass:
+  .hdr-container
+    padding-bottom: 1rem
+    padding-right: 1rem
+    position: sticky
+    top: 0
+  #directory-structure-container
+    flex: 1
+    flex-basis: 50%
+    .file-structure
+      height: 90%
+      overflow-y: auto
+      overflow-x: auto
+      padding-right: 0.5rem
+    ul
+      margin: 0
+      margin-left: 1rem
+    .dir-element
+      &:hover
+        background-color: #f0f0f0
+    .file-element
+      &:hover
+        cursor: pointer
+        background-color: #f0f0f0
+        color: black
+  #file-area
+    flex: 1
+    flex-basis: 50%
+    background-color: #e4e4e4
+    overflow-y: auto
 
-- scolumns = %w[NameT Image Replicas CurrentState]
+    code
+      background-color: #e4e4e4
+      margin-bottom: 0
+      height: -webkit-fill-available
+      white-space: pre
 
-pre: table
-  - scolumns.each do |k|
-    th = k
-  th Actions
-  - services.each do |s|
-    tr
-      - scolumns.each do |c|
-        td title=s["Title#{c}"] == s[c]
-      td
-        a.action href="ps/?service=#{s['Name']}" ps
-        a.action href="inspect/?service=#{s['Name']}" inspect
-        a.action href="logs/?service=#{s['Name']}" logs
-        a.action href="update/?service=#{s['Name']}" onclick="return confirm('Are you sure to Pull and Update?')" update
+  .chosen
+    background-color: rgba(77, 125, 208, 0.3)
+    color: black
+
+  .content-container
+    height: 80vh
+    display: flex
+    flex-direction: row
+    column-gap: 1rem
+    padding: 1rem
+    border: 0.1rem solid #ccc
+    border-radius: 0.5rem
+
+  .margin-remove-top
+    margin-top: 0 !important
+
+  .float-right
+    float: right !important
+  .base-padding
+    padding: 0.5rem
+  .width-half
+    width: 50% !important
+
+h1 DB Backups directory
+h3.margin-remove-top= "Total size: #{represent_size(structure[:size])}"
+.content-container
+  #directory-structure-container
+    .hdr-container
+      span.table-header= "Files"
+      span.table-header.float-right= "Size"
+    .file-structure
+      - render_structure = ->(structure, parent_path = '', parent_id = 'root', counter = 0) do
+        - structure&.select{|n, c| c.is_a?(Hash) && c[:is_dir] }.each do |name, content|
+          li
+            - current_path = "#{parent_path}/#{name}"
+            - current_id = "node_#{parent_id}_#{counter}"
+            .dir-element
+              a href="#" uk-toggle="target: ##{current_id}"
+                span uk-icon="icon: folder"
+                = " #{name}"
+              span.float-right #{represent_size(content[:size])}
+            ul.uk-list.uk-margin-left id=current_id hidden=true
+              - render_structure.call(content, current_path, current_id, 0)
+          - counter += 1
+        - structure&.select{|n, c| !(c.is_a?(Hash) && c[:is_dir]) && n != :size && c.is_a?(Hash) }.each do |name, content|
+          li
+            - current_path = "#{parent_path}/#{name}"
+            - current_id = "node_#{parent_id}_#{counter}"
+            .file-element data-href="'/file-in-archive/#{parent_path}/#{name}'"
+              span uk-icon="icon: file-text"
+              = " #{name}"
+              span.float-right #{represent_size(content[:size])}
+          - counter += 1
+
+      - render_structure.call(structure)
+  #file-area.base-padding.content-display.width-half Choose file to view content
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/ - scolumns = %w[NameT Image Replicas CurrentState]
+/
+/ pre: table
+/   - scolumns.each do |k|
+/     th = k
+/   th Actions
+/   - services.each do |s|
+/     tr
+/       - scolumns.each do |c|
+/         td title=s["Title#{c}"] == s[c]
+/       td
+/         a.action href="ps/?service=#{s['Name']}" ps
+/         a.action href="inspect/?service=#{s['Name']}" inspect
+/         a.action href="logs/?service=#{s['Name']}" logs
+/         a.action href="update/?service=#{s['Name']}" onclick="return confirm('Are you sure to Pull and Update?')" update

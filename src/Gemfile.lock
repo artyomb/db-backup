@@ -156,7 +156,6 @@ PLATFORMS
 DEPENDENCIES
   async-io
   falcon
-  parallel
   rack
   rackup
   rubocop
