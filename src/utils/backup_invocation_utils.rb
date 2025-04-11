@@ -2,9 +2,46 @@ def start_backups
   loop do
     system("/bin/bash #{Dir.pwd}/backup#{ENV['DEBUG'].nil? ? '' : '_debug'}.sh")
     garbage_collect
+    begin
+      perform_rsync
+    rescue Exception => e
+      puts "Rsync command error: #{e}"
+    end
     sleep ENV['BACKUP_INTERVAL'].to_i * 60
   end
+end
 
+def perform_rsync
+  puts "Starting rsync backup transfer"
+  target_host = ENV['BACKUP_TARGET_HOST']
+  target_host_private_key = ENV['BACKUP_TARGET_HOST_PRIVATE_KEY']
+  target_path = ENV['BACKUP_TARGET_PATH']
+
+  if target_host.nil? || target_path.nil? || target_host_private_key.nil?
+    puts "Error: BACKUP_TARGET_HOST, BACKUP_TARGET_HOST_PRIVATE_KEY or BACKUP_TARGET_PATH not set in environment"
+    return
+  end
+
+  Tempfile.create('rsync_key') do |key_file|
+    key_file.write(target_host_private_key)
+    key_file.chmod(0600)  # Secure permissions for SSH
+    key_file.flush
+
+    rsync_command = "rsync -av --delete -e \"ssh -vvv -i #{key_file.path} -o StrictHostKeyChecking=no -T\" #{BACKUPS_DIR}/ root@#{target_host}:#{target_path}/"
+
+    puts "Running: #{rsync_command}"
+    output = `#{rsync_command} 2>&1`
+    puts output
+
+    unless $?.success?
+      raise "Rsync failed with exit code #{$?.exitstatus}"
+    end
+    puts "Rsync transfer completed successfully"
+  end
+
+  # rsync_command = "sshpass -p '#{target_host_root_passw}' rsync -av -e \"ssh -o StrictHostKeyChecking=no\" --delete #{BACKUPS_DIR}/ #{target_host}:#{target_path}/"
+  # rsync_command = "rsync -av -e \"ssh -i #{target_host_private_key} -o StrictHostKeyChecking=no\" --delete #{BACKUPS_DIR}/ #{target_host}:#{target_path}/"
+  # result = system(rsync_command)
 end
 
 def garbage_collect

@@ -5,7 +5,7 @@ RUN apt update && apt install -y curl gnupg2 lsb-release \
  && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql.gpg \
  && echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
  && apt update \
- && apt install -y postgresql-client \
+ && apt install -y postgresql-client rsync sshpass \
     build-essential pkg-config bash libpq-dev openssh-client \
     libsqlite3-dev libssl-dev libgeos-dev jq \
  && rm -rf /var/lib/apt/lists/*
@@ -25,7 +25,7 @@ RUN apt update && apt install -y curl gnupg2 lsb-release \
  && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql.gpg \
  && echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
  && apt update \
- && apt install -y postgresql-client \
+ && apt install -y postgresql-client rsync sshpass \
     build-essential pkg-config bash libpq-dev openssh-client \
     libsqlite3-dev libssl-dev libgeos-dev jq \
  && rm -rf /var/lib/apt/lists/*
