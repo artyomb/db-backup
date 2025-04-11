@@ -3,6 +3,7 @@ require 'sinatra'
 require 'json'
 require 'sinatra/reloader'
 require_relative 'utils/common_utils'
+require_relative 'utils/backup_invocation_utils'
 
 get '/', &-> { slim :index }
 get '/index', &-> { slim :index }
@@ -25,5 +26,5 @@ if ENV['DEBUG'] == "true"
 end
 BACKUPS_DIR = ENV['DEBUG'].nil? ? '/backups' : './backups'
 puts "All backups will be stored in #{BACKUPS_DIR}"
-Thread.new { system("/bin/bash #{Dir.pwd}/backup#{ENV['DEBUG'].nil? ? '' : '_debug'}.sh") }
+Thread.new { start_backups }
 run Sinatra::Application
