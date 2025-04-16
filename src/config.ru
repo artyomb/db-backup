@@ -57,5 +57,5 @@ if ENV['DEBUG'] == "true"
   # restore_by_dump(backup_name)
 end
 
-# Thread.new { start_backups }
+Thread.new { start_backups }
 run Sinatra::Application
