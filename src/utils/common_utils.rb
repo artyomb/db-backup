@@ -74,3 +74,31 @@ def extract_sql_by_backup(backup_path)
     return nil
   end
 end
+
+def log_service_environment_variables
+  puts "Service-specific environment variables:"
+  keys_for_logging = [
+    "DEBUG",
+    "BACKUPS_DIR",
+    "BACKUP_INTERVAL",
+    "DB_URL",
+    "TABLES",
+    "BACKUP_TARGET_HOST",
+    "BACKUP_TARGET_HOST_PRIVATE_KEY",
+    "BACKUP_TARGET_PATH",
+    "RESTORE_TARGET_HOST_PORT",
+    "RESTORE_TARGET_USER",
+    "RESTORE_TARGET_PASSWORD",
+    "RESTORE_TARGET_DB_NAME"
+  ]
+  ENV.each do |key, value|
+    if keys_for_logging.include?(key)
+      if key != "BACKUP_TARGET_HOST_PRIVATE_KEY"
+        puts "#{key}: #{value}"
+      else
+        puts "#{key}: #{'*' * ENV["BACKUP_TARGET_HOST_PRIVATE_KEY"].size}" unless ENV["BACKUP_TARGET_HOST_PRIVATE_KEY"].nil?
+        puts "#{key}: #{value}" if ENV["BACKUP_TARGET_HOST_PRIVATE_KEY"].nil?
+      end
+    end
+  end
+end

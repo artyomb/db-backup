@@ -14,6 +14,94 @@ ruby:
                   nil
                 end
 javascript:
+
+    function callRestoreDialog(url) {
+        console.log("Restore dialog called with URL:", url);
+        const dialog = document.createElement("div");
+        dialog.className = "dialog-overlay";
+        dialog.style.position = "fixed";
+        dialog.style.top = "0";
+        dialog.style.left = "0";
+        dialog.style.width = "100%";
+        dialog.style.height = "100%";
+        dialog.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
+        dialog.style.display = "flex";
+        dialog.style.justifyContent = "center";
+        dialog.style.alignItems = "center";
+        dialog.style.zIndex = "1000";
+        dialog.innerHTML = `
+            <div class="restore-dialog" style="background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                <h2>Restore Confirmation</h2>
+                <p>Are you sure you want to restore this file?</p>
+                <div class="dialog-buttons">
+                    <button onclick="submitRestore('${url}')">Yes</button>
+                    <button onclick="closeRestoreDialog()">No</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(dialog);
+    }
+    function closeRestoreDialog() {
+        // TODO: implement restore dialog
+        document.querySelector(".dialog-overlay").remove();
+        console.log("Restore dialog closed");
+    }
+
+    async function submitRestore(url) {
+        // TODO: implement restore dialog
+        console.log("Restore submitted with URL:", url);
+        document.querySelector(".dialog-overlay").innerHTML = `
+            <div class="restore-dialog" style="background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                <div style="text-align: center;">
+                    <div class="loading-spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
+                    <p>Restoring database by chosen backup...</p>
+                </div>
+            </div>
+            <style>
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            </style>
+        `;
+        const response = await fetch(url, { method: 'POST' });
+        const notification = document.createElement("div");
+        const isSuccess = response.ok;
+        document.querySelector(".dialog-overlay").remove();
+        notification.className = `notification ${isSuccess ? 'success' : 'error'}`;
+        Object.assign(notification.style, {
+            position: "fixed",
+            top: "20px",
+            right: "20px",
+            padding: "15px",
+            borderRadius: "4px",
+            zIndex: "1000",
+            backgroundColor: isSuccess ? "#4CAF50" : "#f44336",
+            color: "white",
+            boxShadow: "0 2px 5px rgba(0,0,0,0.2)",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px"
+        });
+        const messageSpan = document.createElement("span");
+        messageSpan.textContent = await response.text();
+        const closeButton = document.createElement("button");
+        closeButton.innerHTML = "×";
+        Object.assign(closeButton.style, {
+            background: "none",
+            border: "none",
+            color: "white",
+            fontSize: "20px",
+            cursor: "pointer",
+            padding: "0 5px"
+        });
+        closeButton.onclick = () => notification.remove();
+        notification.appendChild(messageSpan);
+        notification.appendChild(closeButton);
+        document.body.appendChild(notification);
+    }
+
+
     document.addEventListener("DOMContentLoaded", function() {
         const fileViewArea = document.getElementById("file-area");
 
@@ -36,6 +124,13 @@ javascript:
                     } catch (error) {
                         console.error("Error downloading file:", error);
                     }
+                    return;
+                }
+                if (event.target.classList.contains('restore-icon')) {
+                    const iconElement = event.target;
+                    const url = iconElement.dataset.href;
+                    callRestoreDialog(url);
+                    event.stopPropagation();
                     return;
                 }
 
@@ -141,53 +236,53 @@ sass:
       transform: translateY(1px)
       box-shadow: 0 1px 2px rgba(0,0,0,0.1)
 
+  .restore-icon
+      display: inline-block
+      margin-right: 0.5rem
+      padding: 0.15rem 0.3rem
+      border-radius: 0.3rem
+      background-color: #3699f9
+      color: white
+      text-decoration: none
+      transition: all 0.3s ease
+      cursor: pointer
+      font-size: 0.9rem
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1)
+
+      &:hover
+        background-color: #4b7aaf
+        transform: translateY(-1px)
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15)
+
+      &:active
+        transform: translateY(1px)
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1)
+
 h1 DB Backups directory
 h3.margin-remove-top= "Total size: #{represent_size(structure[:size])}"
 .content-container
   #directory-structure-container
-    .hdr-container
-      span.table-header= "Files"
-      span.table-header.float-right= "Size"
-    .file-structure
+    table
+      thead
+        tr
+          td.table-header= "Files"
+          td.table-header.float-right= "Size"
+          td.table-header style="width: 1%"= "Actions"
+      tbody
       - render_structure = ->(structure, parent_path = '', parent_id = 'root', counter = 0) do
-        - structure&.select{|n, c| c.is_a?(Hash) && c[:is_dir] }.each do |name, content|
-          li
-            - current_path = "#{parent_path}/#{name}"
-            - current_id = "node_#{parent_id}_#{counter}"
-            .dir-element
-              a href="#" uk-toggle="target: ##{current_id}"
-                span uk-icon="icon: folder"
-                = " #{name}"
-              span.float-right #{represent_size(content[:size])}
-            ul.uk-list.uk-margin-left id=current_id hidden=true
-              - render_structure.call(content, current_path, current_id, 0)
-          - counter += 1
         - structure&.select{|n, c| !(c.is_a?(Hash) && c[:is_dir]) && n != :size && c.is_a?(Hash) }.each do |name, content|
-          li
+          tr.file-element data-href="'/file-in-archive/#{name}'"
             - current_path = "#{parent_path}/#{name}"
             - current_id = "node_#{parent_id}_#{counter}"
-            .file-element data-href="'/file-in-archive/#{parent_path}/#{name}'"
-              span.download-icon data-href="'/download-dump-archive/#{parent_path}/#{name}'"= "⬇️"
+            td
               span uk-icon="icon: file-text"
               = " #{name}"
+            td
               span.float-right #{represent_size(content[:size])}
+            td
+              span.restore-icon.align-content data-href="/restore-by-dump/#{name}"= "↺"
+              span.download-icon.align-content data-href="'/download-dump-archive/#{name}'"= "↓"
           - counter += 1
 
       - render_structure.call(structure)
   #file-area.base-padding.content-display.width-half Choose file to view content
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-/ - scolumns = %w[NameT Image Replicas CurrentState]
-/
-/ pre: table
-/   - scolumns.each do |k|
-/     th = k
-/   th Actions
-/   - services.each do |s|
-/     tr
-/       - scolumns.each do |c|
-/         td title=s["Title#{c}"] == s[c]
-/       td
-/         a.action href="ps/?service=#{s['Name']}" ps
-/         a.action href="inspect/?service=#{s['Name']}" inspect
-/         a.action href="logs/?service=#{s['Name']}" logs
-/         a.action href="update/?service=#{s['Name']}" onclick="return confirm('Are you sure to Pull and Update?')" update
