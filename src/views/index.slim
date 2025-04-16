@@ -38,14 +38,14 @@ javascript:
                 <p>Are you sure you want to start restoring with following parameters?</p>
                 <div class="form-group" style="margin-bottom: 15px;">
                     <label for="backupName">SQL File:</label>
-                    <input type="text" id="backupName" name="backupName" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${backupName}" readonly>
+                    <input type="text" id="backupName" name="backupName" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${backupName}" disabled>
                     <label for="hostPort">Host and Port:</label>
-                    <input type="text" id="hostPort" name="hostPort" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${restoring_host_port}" readonly>
+                    <input type="text" id="hostPort" name="hostPort" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${restoring_host_port}" disabled>
                     <label for="user">User:</label>
-                    <input type="text" id="user" name="user" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${restoring_user}" readonly>
+                    <input type="text" id="user" name="user" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${restoring_user}" disabled>
                     <laber for="password">Password:</label>
-                    <input type="password" id="password" name="password" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="***" readonly>
-                    <label for="dbName">Database Name (default 'temporary_db'):</label>
+                    <input type="password" id="password" name="password" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="***" disabled>
+                    <label for="dbName">Database Name:</label>
                     <input type="text" id="dbName" name="dbName" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${backupName.split('.')[0]}">
                 </div>
                 <div class="dialog-buttons">
@@ -66,6 +66,10 @@ javascript:
         // TODO: implement restore dialog
         console.log("Restore submitted with URL:", url);
         const dbName = document.getElementById("dbName").value;
+        if (!dbName) {
+            alert("Please enter a database name.");
+            throw new Error("Please enter a database name.");
+        }
         document.querySelector(".dialog-overlay").innerHTML = `
             <div class="restore-dialog" style="background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
                 <div style="text-align: center;">
