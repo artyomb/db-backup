@@ -1,6 +1,6 @@
 require 'open3'
 
-def restore_by_dump(backup_path)
+def restore_by_dump(backup_path, database_name)
   puts "Restoring backup at #{Time.now} by dump #{backup_path}"
   db_host_port     = ENV['RESTORE_TARGET_HOST_PORT']
   raise "Target database host and port are not specified" if db_host_port.nil?
@@ -8,7 +8,7 @@ def restore_by_dump(backup_path)
   db_port = db_host_port.split(':').last if db_host_port.split(':').size > 1
   db_user     = ENV['RESTORE_TARGET_USER']
   db_password = ENV['RESTORE_TARGET_PASSWORD']
-  db_name     = ENV['RESTORE_TARGET_DB_NAME'] || "temporary_db"
+  db_name     = database_name || "temporary_db"
   missing_vars = []
   missing_vars << 'RESTORE_TARGET_HOST_PORT' if db_host_port.nil?
   missing_vars << 'RESTORE_TARGET_USER' if db_user.nil?

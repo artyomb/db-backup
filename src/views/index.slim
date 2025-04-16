@@ -14,10 +14,13 @@ ruby:
                   nil
                 end
 javascript:
+    let restoring_host_port = `#{{ENV['RESTORE_TARGET_HOST_PORT'].to_s}}`;
+    let restoring_user = `#{{ENV['RESTORE_TARGET_USER']}}`;
 
     function callRestoreDialog(url) {
         console.log("Restore dialog called with URL:", url);
         const dialog = document.createElement("div");
+        const backupName = url.split('/').pop();
         dialog.className = "dialog-overlay";
         dialog.style.position = "fixed";
         dialog.style.top = "0";
@@ -32,7 +35,19 @@ javascript:
         dialog.innerHTML = `
             <div class="restore-dialog" style="background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
                 <h2>Restore Confirmation</h2>
-                <p>Are you sure you want to restore this file?</p>
+                <p>Are you sure you want to start restoring with following parameters?</p>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label for="backupName">SQL File:</label>
+                    <input type="text" id="backupName" name="backupName" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${backupName}" readonly>
+                    <label for="hostPort">Host and Port:</label>
+                    <input type="text" id="hostPort" name="hostPort" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${restoring_host_port}" readonly>
+                    <label for="user">User:</label>
+                    <input type="text" id="user" name="user" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${restoring_user}" readonly>
+                    <laber for="password">Password:</label>
+                    <input type="password" id="password" name="password" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="***" readonly>
+                    <label for="dbName">Database Name (default 'temporary_db'):</label>
+                    <input type="text" id="dbName" name="dbName" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${backupName.split('.')[0]}">
+                </div>
                 <div class="dialog-buttons">
                     <button onclick="submitRestore('${url}')">Yes</button>
                     <button onclick="closeRestoreDialog()">No</button>
@@ -50,6 +65,7 @@ javascript:
     async function submitRestore(url) {
         // TODO: implement restore dialog
         console.log("Restore submitted with URL:", url);
+        const dbName = document.getElementById("dbName").value;
         document.querySelector(".dialog-overlay").innerHTML = `
             <div class="restore-dialog" style="background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
                 <div style="text-align: center;">
@@ -64,9 +80,20 @@ javascript:
                 }
             </style>
         `;
-        const response = await fetch(url, { method: 'POST' });
+        let isSuccess;
+        let notificationMessage;
         const notification = document.createElement("div");
-        const isSuccess = response.ok;
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                body: JSON.stringify({ database_name: dbName }),
+            });
+            isSuccess = response.ok;
+            notificationMessage = await response.text();
+        } catch (error) {
+            isSuccess = false;
+            notificationMessage = error.message;
+        }
         document.querySelector(".dialog-overlay").remove();
         notification.className = `notification ${isSuccess ? 'success' : 'error'}`;
         Object.assign(notification.style, {
@@ -84,7 +111,7 @@ javascript:
             gap: "10px"
         });
         const messageSpan = document.createElement("span");
-        messageSpan.textContent = await response.text();
+        messageSpan.textContent = notificationMessage;
         const closeButton = document.createElement("button");
         closeButton.innerHTML = "×";
         Object.assign(closeButton.style, {

@@ -27,7 +27,9 @@ end
 
 post '/restore-by-dump/:backup_name' do
   begin
-    message = restore_by_dump(params[:backup_name])
+    database_name = JSON.parse(request.body.read)["database_name"]
+    message = restore_by_dump(params[:backup_name], database_name)
+
     body = { status: "ok", message: message }
     [200, { 'Content-Type' => 'application/json' }, body.to_json]
   rescue Exception => e
@@ -55,5 +57,5 @@ if ENV['DEBUG'] == "true"
   # restore_by_dump(backup_name)
 end
 
-Thread.new { start_backups }
+# Thread.new { start_backups }
 run Sinatra::Application
