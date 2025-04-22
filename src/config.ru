@@ -6,6 +6,9 @@ require_relative 'utils/common_utils'
 require_relative 'utils/backup_invocation_utils'
 require_relative 'utils/restoring_utils'
 
+$last_backup_report = { status_code: 0, message: '', error_message: '' }
+$last_rsync_reports = []
+
 BACKUPS_DIR = ENV['DEBUG'].nil? ? '/backups' : './backups'
 puts "All backups will be stored in #{BACKUPS_DIR}"
 
@@ -59,3 +62,9 @@ end
 
 Thread.new { start_backups }
 run Sinatra::Application
+# TODO:
+# 1. Rework backup policy: if backup for last hour exists, then backup for current hour will be skipped +
+# 2, Change ENVIRONMENT variables +
+# 3. Handle all errors and display them in UI +
+# 4. Add more detailed logging +
+# 5. Improve UI elements +

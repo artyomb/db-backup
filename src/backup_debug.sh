@@ -17,17 +17,19 @@ BACKUP_FILE="./backups/${DB_NAME}_${TIMESTAMP}.sql"
 DUMP_CMD="pg_dump --dbname=\"$DB_URL\""
 [ -n "$TABLES" ] && DUMP_CMD="$DUMP_CMD --table=\"$(echo $TABLES | sed 's/ /" --table="/g')\""
 
-if eval "$DUMP_CMD" | gzip -9 > "$BACKUP_FILE"; then
-  echo "$(date) - Backup successfully created (size: $(du -h "$BACKUP_FILE" | cut -f1))"
-else
-  echo "$(date) - Backup failed!" >&2
+echo "$(date) - Creating backup..."
+if ! eval "$DUMP_CMD" > "$BACKUP_FILE"; then
+  echo "$(date) - Backup creation failed!" >&2
   [ -f "$BACKUP_FILE" ] && rm "$BACKUP_FILE"
+  exit 1
 fi
 
-echo "$(date) - Creating backup..."
-eval "$DUMP_CMD" > "$BACKUP_FILE"
-
 echo "$(date) - Compressing backup..."
-gzip -f "$BACKUP_FILE"
+if ! gzip -f "$BACKUP_FILE"; then
+  echo "$(date) - Backup compression failed!" >&2
+  [ -f "$BACKUP_FILE" ] && rm "$BACKUP_FILE"
+  [ -f "${BACKUP_FILE}.gz" ] && rm "${BACKUP_FILE}.gz"
+  exit 1
+fi
 
 echo "$(date) - Backup complete: ${BACKUP_FILE}.gz"

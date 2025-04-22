@@ -1,47 +1,79 @@
+require_relative 'common_utils'
 def start_backups
   loop do
-    system("/bin/bash #{Dir.pwd}/backup#{ENV['DEBUG'].nil? ? '' : '_debug'}.sh")
-    garbage_collect
-    begin
-      perform_rsync
-    rescue Exception => e
-      puts "Rsync command error: #{e}"
+    latest_backup_time = define_latest_backup_time
+    if latest_backup_time.nil? || latest_backup_time < Time.now - 60 * 60
+      backup_cmd = ['/bin/bash', "#{Dir.pwd}/backup#{ENV['DEBUG'].nil? ? '' : '_debug'}.sh"]
+      puts "Call backups script at #{Time.now}"
+      script_out, script_err, script_status = Open3.capture3(*backup_cmd)
+
+      if script_status.exitstatus == 0
+        puts "Backups script performed successfully; output:\n#{'*' * 150}\n#{script_out}#{'*' * 150}"
+        $last_backup_report = { status_code: script_status.exitstatus, message: script_out , error_message: script_err }
+      else
+        puts "Backup failed with exit status: #{script_status.exitstatus}"
+        puts "Script output:\n#{'*' * 150}\n#{script_out}#{'*' * 150}"
+        puts "\e[31mError message:\n#{'*' * 150}\n#{script_err}#{'*' * 150}\e[0m"
+        $last_backup_report = { status_code: script_status.exitstatus, message: script_out, error_message: script_err }
+      end
+      begin
+        garbage_collect
+      rescue Exception => e
+        puts "Error during garbage collection: #{e}"
+      end
+      if script_status.exitstatus == 0
+        begin
+          perform_rsync
+        rescue Exception => e
+          puts "Rsync call error: #{e}"
+        end
+      end
+    else
+      puts "Skipping backup because it was performed less than 1 hour ago"
+      $last_backup_report = { status_code: 0, message: 'Skipping backup because it was performed less than 1 hour ago', error_message: '' }
     end
     sleep ENV['BACKUP_INTERVAL'].to_i * 60
   end
 end
 
 def perform_rsync
+  $last_rsync_reports = []
   puts "Starting rsync backup transfer"
-  target_host = ENV['BACKUP_TARGET_HOST']
-  target_host_private_key = ENV['BACKUP_TARGET_HOST_PRIVATE_KEY']
-  target_path = ENV['BACKUP_TARGET_PATH']
+  rsync_targets = ENV['RSYNC_TARGETS']
+  rsync_targets_private_key = ENV['RSYNC_TARGETS_PRIVATE_KEY']
 
-  if target_host.nil? || target_path.nil? || target_host_private_key.nil?
-    puts "Error: BACKUP_TARGET_HOST, BACKUP_TARGET_HOST_PRIVATE_KEY or BACKUP_TARGET_PATH not set in environment"
-    return
+  if rsync_targets.nil? || rsync_targets.empty?
+    puts "No rsync targets specified"
+    $last_rsync_reports << { status_code: 1, message: 'No rsync targets specified', error_message: 'No rsync targets specified' }
+    raise "No rsync targets specified"
+  end
+  if rsync_targets_private_key.nil?
+    puts "No rsync targets private key specified"
+    $last_rsync_reports << { status_code: 1, message: 'No rsync targets private key specified', error_message: 'No rsync targets private key specified' }
+    raise "No rsync targets private key specified"
   end
 
+  rsync_targets = rsync_targets.split(',')
   Tempfile.create('rsync_key') do |key_file|
-    key_file.write(target_host_private_key)
+    key_file.write(rsync_targets_private_key)
     key_file.chmod(0600)  # Secure permissions for SSH
     key_file.flush
-
-    rsync_command = "rsync -av --delete -e \"ssh -vvv -i #{key_file.path} -o StrictHostKeyChecking=no -T\" #{BACKUPS_DIR}/ root@#{target_host}:#{target_path}/"
-
-    puts "Running: #{rsync_command}"
-    output = `#{rsync_command} 2>&1`
-    puts output
-
-    unless $?.success?
-      raise "Rsync failed with exit code #{$?.exitstatus}"
+    rsync_targets.each do |rsync_target|
+      rsync_command = "rsync -av --delete -e \"ssh -vvv -i #{key_file.path} -o StrictHostKeyChecking=no -T\" #{BACKUPS_DIR}/ #{rsync_target}/"
+      puts "Running: #{rsync_command}"
+      rsync_out, rsync_err, rsync_status = Open3.capture3(rsync_command)
+      if rsync_status.exitstatus == 0
+        puts "Rsync transfer for #{rsync_target} completed successfully"
+        $last_rsync_reports << { status_code: rsync_status.exitstatus, message: "Output of rsync with target #{rsync_target}:\n#{rsync_out}", error_message: rsync_err }
+      else
+        puts "Rsync transfer for #{rsync_target} failed with exit status: #{rsync_status.exitstatus}"
+        puts "Rsync output:\n#{'*' * 150}\n#{rsync_out}#{'*' * 150}"
+        puts "\e[31mError message:\n#{'*' * 150}\n#{rsync_err}#{'*' * 150}\e[0m"
+        $last_rsync_reports << { status_code: rsync_status.exitstatus, message: "Output of rsync with target #{rsync_target}:\n#{rsync_out}", error_message: rsync_err }
+      end
     end
-    puts "Rsync transfer completed successfully"
+    puts "All rsync transfers completed"
   end
-
-  # rsync_command = "sshpass -p '#{target_host_root_passw}' rsync -av -e \"ssh -o StrictHostKeyChecking=no\" --delete #{BACKUPS_DIR}/ #{target_host}:#{target_path}/"
-  # rsync_command = "rsync -av -e \"ssh -i #{target_host_private_key} -o StrictHostKeyChecking=no\" --delete #{BACKUPS_DIR}/ #{target_host}:#{target_path}/"
-  # result = system(rsync_command)
 end
 
 def garbage_collect
@@ -100,16 +132,15 @@ def garbage_collect
     deleted_backups += 1
   end
   puts "Deleting process completed. Deleted #{deleted_backups} backups."
-  # backups_categories[:this_week].each do |day_of_week, backups|
-  #   latest_backup = backups.max_by { |backup| backup[:date] }
-  #   marked_to_retain.add(latest_backup[:filename]) if latest_backup
-  # end
-  # backups_categories[:this_month].each do |week_in_year, backups|
-  #   latest_backup = backups.max_by { |backup| backup[:date] }
-  #   marked_to_retain.add(latest_backup[:filename]) if latest_backup
-  # end
-  # backups_categories[:other_months].each do |year_month, backups|
-  #   latest_backup = backups.max_by { |backup| backup[:date] }
-  #   marked_to_retain.add(latest_backup[:filename]) if latest_backup
-  # end
+end
+
+def define_latest_backup_time
+  latest_backup_time = nil
+  Dir.children(BACKUPS_DIR).each do |filename|
+    backup_date = determine_backup_time(filename)
+    if latest_backup_time.nil? || backup_date > latest_backup_time
+      latest_backup_time = backup_date
+    end
+  end
+  latest_backup_time
 end
