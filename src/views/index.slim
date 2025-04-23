@@ -18,10 +18,8 @@ javascript:
     let restoring_user = `#{{ENV['RESTORE_TARGET_USER']}}`;
     let char_limit = 100;
 
-    function callRestoreDialog(url) {
-        console.log("Restore dialog called with URL:", url);
+    function createConfirmationDialog(confirmationCallbackString, confirmationHTML) {
         const dialog = document.createElement("div");
-        const backupName = url.split('/').pop();
         dialog.className = "dialog-overlay";
         dialog.style.position = "fixed";
         dialog.style.top = "0";
@@ -34,71 +32,41 @@ javascript:
         dialog.style.alignItems = "center";
         dialog.style.zIndex = "1000";
         dialog.innerHTML = `
-            <div class="restore-dialog" style="background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                <h2>Restore Confirmation</h2>
-                <p>Are you sure you want to start restoring with following parameters?</p>
-                <div class="form-group" style="margin-bottom: 15px;">
-                    <label for="backupName">SQL File:</label>
-                    <input type="text" id="backupName" name="backupName" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${backupName}" disabled>
-                    <label for="hostPort">Host and Port:</label>
-                    <input type="text" id="hostPort" name="hostPort" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${restoring_host_port}" disabled>
-                    <label for="user">User:</label>
-                    <input type="text" id="user" name="user" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${restoring_user}" disabled>
-                    <laber for="password">Password:</label>
-                    <input type="password" id="password" name="password" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="***" disabled>
-                    <label for="dbName">Database Name:</label>
-                    <input type="text" id="dbName" name="dbName" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${backupName.split('.')[0]}">
-                </div>
-                <div class="dialog-buttons">
-                    <button onclick="submitRestore('${url}')">Yes</button>
-                    <button onclick="closeRestoreDialog()">No</button>
-                </div>
-            </div>
-        `;
+                        <div class="confirmation-dialog" style="background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                            ${confirmationHTML}
+                            <div class="dialog-buttons">
+                                <button onclick="${confirmationCallbackString}">Yes</button>
+                                <button onclick="closeConfirmationDialog()">No</button>
+                            </div>
+                        </div>
+                    `;
         document.body.appendChild(dialog);
     }
-    function closeRestoreDialog() {
-        // TODO: implement restore dialog
-        document.querySelector(".dialog-overlay").remove();
-        console.log("Restore dialog closed");
+
+    function showLoadingInDialog(message) {
+        document.querySelector(".dialog-overlay").innerHTML = `
+                    <div class="restore-dialog" style="background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                        <div style="text-align: center;">
+                            <div class="loading-spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
+                            <p>${message}</p>
+                        </div>
+                    </div>
+                    <style>
+                        @keyframes spin {
+                            0% { transform: rotate(0deg); }
+                            100% { transform: rotate(360deg); }
+                        }
+                    </style>
+                `;
     }
 
-    async function submitRestore(url) {
-        // TODO: implement restore dialog
-        console.log("Restore submitted with URL:", url);
-        const dbName = document.getElementById("dbName").value;
-        if (!dbName) {
-            alert("Please enter a database name.");
-            throw new Error("Please enter a database name.");
-        }
-        document.querySelector(".dialog-overlay").innerHTML = `
-            <div class="restore-dialog" style="background: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                <div style="text-align: center;">
-                    <div class="loading-spinner" style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto;"></div>
-                    <p>Restoring database by chosen backup...</p>
-                </div>
-            </div>
-            <style>
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-            </style>
-        `;
-        let isSuccess;
-        let notificationMessage;
+    function closeConfirmationDialog() {
+        document.querySelector(".dialog-overlay").remove();
+        console.log("Confirmation dialog closed");
+    }
+
+    function showNotification(isSuccess, notificationMessage) {
         const notification = document.createElement("div");
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                body: JSON.stringify({ database_name: dbName }),
-            });
-            isSuccess = response.ok;
-            notificationMessage = await response.text();
-        } catch (error) {
-            isSuccess = false;
-            notificationMessage = error.message;
-        }
         document.querySelector(".dialog-overlay").remove();
         notification.className = `notification ${isSuccess ? 'success' : 'error'}`;
         Object.assign(notification.style, {
@@ -131,6 +99,81 @@ javascript:
         notification.appendChild(messageSpan);
         notification.appendChild(closeButton);
         document.body.appendChild(notification);
+    }
+
+
+    function callRestoreDialog(url) {
+        console.log("Restore dialog called with URL:", url);
+        const backupName = url.split('/').pop();
+        const confirmationCallbackString = `submitRestore('${url}')`;
+        const confimationHTML = `
+        <h2>Restore Confirmation</h2>
+        <p>Are you sure you want to start restoring with following parameters?</p>
+        <div class="form-group" style="margin-bottom: 15px;">
+            <label for="backupName">SQL File:</label>
+            <input type="text" id="backupName" name="backupName" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${backupName}" disabled>
+            <label for="hostPort">Host and Port:</label>
+            <input type="text" id="hostPort" name="hostPort" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${restoring_host_port}" disabled>
+            <label for="user">User:</label>
+            <input type="text" id="user" name="user" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${restoring_user}" disabled>
+            <laber for="password">Password:</label>
+            <input type="password" id="password" name="password" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="***" disabled>
+            <label for="dbName">Database Name:</label>
+            <input type="text" id="dbName" name="dbName" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${backupName.split('.')[0]}">
+        </div>
+        `;
+        createConfirmationDialog(confirmationCallbackString, confimationHTML);
+    }
+
+    async function callForceBackupDialog() {
+        const confirmationCallbackString = "submitForceBackup()";
+        const confimationHTML = `
+                <h2>Force Backup Confirmation</h2>
+                <p>Are you sure you want to invoke backup pipeline?</p>
+                `;
+        createConfirmationDialog(confirmationCallbackString, confimationHTML);
+    }
+
+    async function submitRestore(url) {
+        console.log("Restore submitted with URL:", url);
+        const dbName = document.getElementById("dbName").value;
+        if (!dbName) {
+            alert("Please enter a database name.");
+            throw new Error("Please enter a database name.");
+        }
+        showLoadingInDialog("Restoring database by chosen backup...");
+        let isSuccess;
+        let notificationMessage;
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                body: JSON.stringify({database_name: dbName}),
+            });
+            isSuccess = response.ok;
+            notificationMessage = await response.text();
+        } catch (error) {
+            isSuccess = false;
+            notificationMessage = error.message;
+        }
+        showNotification(isSuccess, notificationMessage);
+    }
+
+    async function submitForceBackup() {
+        console.log("Force backups submitted");
+        showLoadingInDialog("Invoking backup pipeline...");
+        let isSuccess;
+        let notificationMessage;
+        try {
+            const response = await fetch('/invoke-force-backup', {
+                method: 'POST',
+            });
+            isSuccess = response.ok;
+            notificationMessage = await response.text();
+        } catch (error) {
+            isSuccess = false;
+            notificationMessage = error.message;
+        }
+        showNotification(isSuccess, notificationMessage);
     }
 
 
@@ -207,6 +250,12 @@ javascript:
             }
         });
 
+        document.querySelectorAll(".time").forEach(function(element) {
+            const timeString = element.innerHTML; // example "2025-04-23 09:59:41 +0300"
+            const date = new Date(timeString);
+            const options = { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' };
+            element.innerHTML = date.toLocaleString('en-US', options);
+        });
     });
 sass:
   .hdr-container
@@ -311,14 +360,21 @@ sass:
       &:active
         transform: translateY(1px)
         box-shadow: 0 1px 2px rgba(0,0,0,0.1)
-
-h1 Backups
+div
+  .flex.justify-content-space-between
+    h1.vertical-margin-big Backups
+    .margin-big.flex.align-items-center
+      .font-weight-bold.margin-right Force backup
+      .action-box-big.primary-action-background.text-align-center.align-content-center.margin-right-big.cursor-pointer.font-size-bigger onclick="callForceBackupDialog()"="▷"
 h2 Latest DB backup status report (if message is too big, press ctrl+click to expand)
 - background_color = $last_backup_report[:status_code] == 0 ? '#d4edda' : '#f8d7da'
 .width-fit-content.white-space-pre.vertical-margin.overflow-x-auto.limit-max-width style="background-color: #{background_color}; padding: 0.5rem; border-radius: 0.5rem"
-  .vertical-margin-small.font-weight-bold= 'Backup ended ' + (($last_backup_report[:status_code] == 0) ?'successfully' : 'with error') + "\n"
   .vertical-margin-small
-    span.font-weight-bold= "Backup command message:\n"
+    span.font-weight-bold= 'Backup ended ' + (($last_backup_report[:status_code] == 0) ?'successfully' : 'with error')
+    span= " at "
+    span.time.font-weight-bold= $last_backup_report[:time]
+  .vertical-margin-small
+    span.font-weight-bold= "Backup command message:"
     span.expandable-element data-content="#{$last_backup_report[:message]}"
   - if !$last_backup_report[:error_message].nil? && !$last_backup_report[:error_message].empty?
     .vertical-margin-small
@@ -336,7 +392,10 @@ h2 Latest DB backup status report (if message is too big, press ctrl+click to ex
       - $last_rsync_reports.each do |rsync_report|
         - background_color = rsync_report[:status_code] == 0 ? '#d4edda' : '#f8d7da'
         .width-fit-content.white-space-pre.vertical-margin.overflow-x-auto.limit-max-width style="background-color: #{background_color}; padding: 0.5rem; border-radius: 0.5rem"
-          .vertical-margin-small.font-weight-bold= 'Rsync ended ' + ((rsync_report[:status_code] == 0) ? 'successfully' : 'with error') + "\n"
+          .vertical-margin-small
+            span.font-weight-bold= 'Rsync ended ' + ((rsync_report[:status_code] == 0) ? 'successfully' : 'with error')
+            span= " at "
+            span.time.font-weight-bold= rsync_report[:time]
           .vertical-margin-small
             span.font-weight-bold= "Backup command message:\n"
             span.expandable-element data-content="#{rsync_report[:message]}"
@@ -364,15 +423,15 @@ h3.margin-remove-top= "Total size: #{represent_size(structure[:size])}"
             - current_path = "#{parent_path}/#{name}"
             - current_id = "node_#{parent_id}_#{counter}"
             td
-              span uk-icon="icon: file-text"
+              span
               = " #{name}"
             td
-              span.float-right #{determine_backup_time(name)}
+              span.time.float-right #{determine_backup_time(name)}
             td
               span.float-right #{represent_size(content[:size])}
             td
-              span.restore-icon.text-align-center.align-content-center.action-box-sizes data-href="/restore-by-dump/#{name}"= "↺"
-              span.download-icon.text-align-center.align-content-center.action-box-sizes data-href="'/download-dump-archive/#{name}'"= "↓"
+              span.restore-icon.text-align-center.align-content-center.action-box data-href="/restore-by-dump/#{name}"= "↺"
+              span.download-icon.text-align-center.align-content-center.action-box data-href="'/download-dump-archive/#{name}'"= "↓"
           - counter += 1
 
       - render_structure.call(structure)

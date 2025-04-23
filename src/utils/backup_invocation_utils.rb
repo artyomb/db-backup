@@ -2,37 +2,42 @@ require_relative 'common_utils'
 def start_backups
   loop do
     latest_backup_time = define_latest_backup_time
-    if latest_backup_time.nil? || latest_backup_time < Time.now - 60 * 60
-      backup_cmd = ['/bin/bash', "#{Dir.pwd}/backup#{ENV['DEBUG'].nil? ? '' : '_debug'}.sh"]
-      puts "Call backups script at #{Time.now}"
-      script_out, script_err, script_status = Open3.capture3(*backup_cmd)
-
-      if script_status.exitstatus == 0
-        puts "Backups script performed successfully; output:\n#{'*' * 150}\n#{script_out}#{'*' * 150}"
-        $last_backup_report = { status_code: script_status.exitstatus, message: script_out , error_message: script_err }
-      else
-        puts "Backup failed with exit status: #{script_status.exitstatus}"
-        puts "Script output:\n#{'*' * 150}\n#{script_out}#{'*' * 150}"
-        puts "\e[31mError message:\n#{'*' * 150}\n#{script_err}#{'*' * 150}\e[0m"
-        $last_backup_report = { status_code: script_status.exitstatus, message: script_out, error_message: script_err }
-      end
-      begin
-        garbage_collect
-      rescue Exception => e
-        puts "Error during garbage collection: #{e}"
-      end
-      if script_status.exitstatus == 0
-        begin
-          perform_rsync
-        rescue Exception => e
-          puts "Rsync call error: #{e}"
-        end
-      end
+    if latest_backup_time.nil? || latest_backup_time < Time.now - ENV['BACKUP_INTERVAL'].to_i * 60
+      perform_backup_pipeline
+      sleep ENV['BACKUP_INTERVAL'].to_i * 60
     else
       puts "Skipping backup because it was performed less than 1 hour ago"
-      $last_backup_report = { status_code: 0, message: 'Skipping backup because it was performed less than 1 hour ago', error_message: '' }
+      $last_backup_report = { status_code: 0, message: 'Skipping backup because it was performed less than 1 hour ago', error_message: '', time: Time.now }
+      sleep latest_backup_time - Time.now + ENV['BACKUP_INTERVAL'].to_i * 60
     end
-    sleep ENV['BACKUP_INTERVAL'].to_i * 60
+  end
+end
+
+def perform_backup_pipeline
+  backup_cmd = ['/bin/bash', "#{Dir.pwd}/backup#{ENV['DEBUG'].nil? ? '' : '_debug'}.sh"]
+  puts "Call backups script at #{Time.now}"
+  script_out, script_err, script_status = Open3.capture3(*backup_cmd)
+
+  if script_status.exitstatus == 0
+    puts "Backups script performed successfully; output:\n#{'*' * 150}\n#{script_out}#{'*' * 150}"
+    $last_backup_report = { status_code: script_status.exitstatus, message: script_out , error_message: script_err, time: Time.now }
+  else
+    puts "Backup failed with exit status: #{script_status.exitstatus}"
+    puts "Script output:\n#{'*' * 150}\n#{script_out}#{'*' * 150}"
+    puts "\e[31mError message:\n#{'*' * 150}\n#{script_err}#{'*' * 150}\e[0m"
+    $last_backup_report = { status_code: script_status.exitstatus, message: script_out, error_message: script_err, time: Time.now }
+  end
+  begin
+    garbage_collect
+  rescue Exception => e
+    puts "Error during garbage collection: #{e}"
+  end
+  if script_status.exitstatus == 0
+    begin
+      perform_rsync
+    rescue Exception => e
+      puts "Rsync call error: #{e}"
+    end
   end
 end
 
@@ -44,12 +49,12 @@ def perform_rsync
 
   if rsync_targets.nil? || rsync_targets.empty?
     puts "No rsync targets specified"
-    $last_rsync_reports << { status_code: 1, message: 'No rsync targets specified', error_message: 'No rsync targets specified' }
+    $last_rsync_reports << { status_code: 1, message: 'No rsync targets specified', error_message: 'No rsync targets specified', time: Time.now }
     raise "No rsync targets specified"
   end
   if rsync_targets_private_key.nil?
     puts "No rsync targets private key specified"
-    $last_rsync_reports << { status_code: 1, message: 'No rsync targets private key specified', error_message: 'No rsync targets private key specified' }
+    $last_rsync_reports << { status_code: 1, message: 'No rsync targets private key specified', error_message: 'No rsync targets private key specified', time: Time.now }
     raise "No rsync targets private key specified"
   end
 
@@ -64,12 +69,12 @@ def perform_rsync
       rsync_out, rsync_err, rsync_status = Open3.capture3(rsync_command)
       if rsync_status.exitstatus == 0
         puts "Rsync transfer for #{rsync_target} completed successfully"
-        $last_rsync_reports << { status_code: rsync_status.exitstatus, message: "Output of rsync with target #{rsync_target}:\n#{rsync_out}", error_message: rsync_err }
+        $last_rsync_reports << { status_code: rsync_status.exitstatus, message: "Output of rsync with target #{rsync_target}:\n#{rsync_out}", error_message: rsync_err, time: Time.now }
       else
         puts "Rsync transfer for #{rsync_target} failed with exit status: #{rsync_status.exitstatus}"
         puts "Rsync output:\n#{'*' * 150}\n#{rsync_out}#{'*' * 150}"
         puts "\e[31mError message:\n#{'*' * 150}\n#{rsync_err}#{'*' * 150}\e[0m"
-        $last_rsync_reports << { status_code: rsync_status.exitstatus, message: "Output of rsync with target #{rsync_target}:\n#{rsync_out}", error_message: rsync_err }
+        $last_rsync_reports << { status_code: rsync_status.exitstatus, message: "Output of rsync with target #{rsync_target}:\n#{rsync_out}", error_message: rsync_err, time: Time.now }
       end
     end
     puts "All rsync transfers completed"

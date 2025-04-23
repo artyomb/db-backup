@@ -6,7 +6,7 @@ require_relative 'utils/common_utils'
 require_relative 'utils/backup_invocation_utils'
 require_relative 'utils/restoring_utils'
 
-$last_backup_report = { status_code: 0, message: '', error_message: '' }
+$last_backup_report = { status_code: 0, message: '', error_message: '', time: Time.now }
 $last_rsync_reports = []
 
 BACKUPS_DIR = ENV['DEBUG'].nil? ? '/backups' : './backups'
@@ -26,6 +26,14 @@ end
 get '/download-dump-archive/*' do
   path_to_file = params[:splat][0]
   send_file(File.join(BACKUPS_DIR, path_to_file))
+end
+
+post '/invoke-force-backup' do
+  puts "Invoke force backup at #{Time.now}"
+  perform_backup_pipeline
+  response = [200, { 'Content-Type' => 'application/json' }, { status: "ok", message: "Backup pipeline performed successfully. Refresh page to see details in actual backup report." }.to_json] if $last_backup_report[:status_code] == 0
+  response = [500, { 'Content-Type' => 'application/json' }, { status: "error", message: "Backup pipeline failed. Refresh page to see details in actual backup report." }.to_json] if $last_backup_report[:status_code] != 0
+  response
 end
 
 post '/restore-by-dump/:backup_name' do
