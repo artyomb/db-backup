@@ -108,5 +108,5 @@ end
 def determine_backup_time(filename)
   date_time_string = filename.split('_')[-2..-1].join('').split('.').first
   year, month, day, hour, minute, second = date_time_string[0..3], date_time_string[4..5], date_time_string[6..7], date_time_string[8..9], date_time_string[10..11], date_time_string[12..13]
-  Time.new(year, month, day, hour, minute, second, "+03:00")
+  Time.new(year, month, day, hour, minute, second, "+00:00")
 end

@@ -11,7 +11,7 @@ echo "Database: $(echo $DB_URL | awk -F'/' '{print $NF}')"
 [ -n "$TABLES" ] && echo "Tables: $TABLES"
 
 DB_NAME=$(echo "$DB_URL" | awk -F'/' '{print $NF}' | awk -F'?' '{print $1}')
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+TIMESTAMP=$(date -u +"%Y%m%d_%H%M%S")
 BACKUP_FILE="./backups/${DB_NAME}_${TIMESTAMP}.sql"
 
 DUMP_CMD="pg_dump --dbname=\"$DB_URL\""
