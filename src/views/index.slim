@@ -191,7 +191,7 @@ javascript:
                 }
 
                 console.log("Clicked on file element with data-href:", fileElement.dataset.href);
-                const url = eval(fileElement.dataset.href);
+                const url = fileElement.dataset.href;
                 try {
                     const response = await fetch(url);
                     const htmlContent = await response.text();
@@ -399,7 +399,7 @@ h3.margin-remove-top= "Total size: #{represent_size(structure[:size])}"
       tbody
       - render_structure = ->(structure, parent_path = '', parent_id = 'root', counter = 0) do
         - structure&.select{|n, c| !(c.is_a?(Hash) && c[:is_dir]) && n != :size && c.is_a?(Hash) }.each do |name, content|
-          tr.file-element data-href="'file-in-archive/#{name}'"
+          tr.file-element data-href="file-in-archive/#{name}"
             - current_path = "#{parent_path}/#{name}"
             - current_id = "node_#{parent_id}_#{counter}"
             td
