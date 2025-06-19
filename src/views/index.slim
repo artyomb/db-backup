@@ -430,8 +430,8 @@ h3.margin-remove-top= "Total size: #{represent_size(structure[:size])}"
             td
               span.float-right #{represent_size(content[:size])}
             td
-              span.restore-icon.text-align-center.align-content-center.action-box data-href="/restore-by-dump/#{name}"= "↺"
-              span.download-icon.text-align-center.align-content-center.action-box data-href="'/download-dump-archive/#{name}'"= "↓"
+              span.restore-icon.text-align-center.align-content-center.action-box data-href="restore-by-dump/#{name}"= "↺"
+              span.download-icon.text-align-center.align-content-center.action-box data-href="download-dump-archive/#{name}"= "↓"
           - counter += 1
 
       - render_structure.call(structure)
