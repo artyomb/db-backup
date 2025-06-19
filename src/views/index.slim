@@ -182,26 +182,6 @@ javascript:
 
         document.querySelectorAll(".file-element").forEach(function(fileElement) {
             fileElement.addEventListener("click", async function (event) {
-                if (event.target.classList.contains('download-icon')) {
-                    event.stopPropagation();
-                    const iconElement = fileElement.querySelector('.download-icon');
-                    const url = eval(iconElement.dataset.href);
-                    try {
-                        const response = await fetch(url);
-                        const blob = await response.blob();
-                        const downloadUrl = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = downloadUrl;
-                        a.download = eval(iconElement.dataset.href).split('/').pop();
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        window.URL.revokeObjectURL(downloadUrl);
-                    } catch (error) {
-                        console.error("Error downloading file:", error);
-                    }
-                    return;
-                }
                 if (event.target.classList.contains('restore-icon')) {
                     const iconElement = event.target;
                     const url = iconElement.dataset.href;
@@ -431,7 +411,7 @@ h3.margin-remove-top= "Total size: #{represent_size(structure[:size])}"
               span.float-right #{represent_size(content[:size])}
             td
               span.restore-icon.text-align-center.align-content-center.action-box data-href="restore-by-dump/#{name}"= "↺"
-              span.download-icon.text-align-center.align-content-center.action-box data-href="download-dump-archive/#{name}"= "↓"
+              a.download-icon.text-align-center.align-content-center.action-box href="download-dump-archive/#{name}" download=""= "↓"
           - counter += 1
 
       - render_structure.call(structure)
