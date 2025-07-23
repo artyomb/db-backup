@@ -17,8 +17,7 @@ def restore_by_dump(backup_path, database_name)
   db_user     ||= default_db_user
   db_password = ENV['RESTORE_TARGET_PASSWORD']
   db_password ||= default_db_password
-  db_name     = database_name || "temporary_db"
-  db_name     ||= default_db_name
+  db_name     = database_name || default_db_name
   missing_vars = []
   missing_vars << 'RESTORE_TARGET_HOST_PORT' if db_host_port.nil?
   missing_vars << 'RESTORE_TARGET_USER' if db_user.nil?
@@ -48,14 +47,21 @@ def restore_by_dump(backup_path, database_name)
   #   end
   # end
 
-  # Drop database if it exists
-  drop_cmd = ['dropdb', '--force', '--if-exists', '-h', db_host, "--username=#{db_user}", '-e']
-  drop_cmd += ['-p', db_port] if db_port
-  drop_cmd += [db_name]
-  puts "Dropping database #{db_name}..."
-  drop_output, drop_err, drop_status = Open3.capture3(*drop_cmd)
-  puts "Database #{db_name} dropped" if drop_status.success?
+  if db_name == default_db_name
+    # If the database name is the same as the default database name, we will restore the backup into a new database then rename it to the default database name
+    puts "You specified the same database as the origin one. We will restore it in the origin database"
+    puts "Creating new database #{db_name + RESTORE_IN_ORIGIN_DB_SUFFIX} and restoring backup into it"
+    create_and_restore(db_host, db_port, db_user, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, backup_path)
+    drop_database(db_host, db_port, db_user, db_name + OLD_DB_SUFFIX)
+    rename_db(db_host_port, db_user, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, db_name)
+  else
+    # Drop database if it exists
+    drop_database(db_host, db_port, db_user, db_name)
+    create_and_restore(db_host, db_port, db_user, db_name, backup_path) if db_name != default_db_name
+  end
+end
 
+def create_and_restore(db_host, db_port, db_user, db_name, backup_path)
   # Create database again
   puts "Creating fresh database #{db_name}..."
   create_cmd = ['createdb', '-h', db_host, '-U', db_user, db_name]
@@ -97,4 +103,58 @@ def restore_by_dump(backup_path, database_name)
     puts "Temporary SQL file removed"
     system("rm #{sql_file}")
   end
+end
+
+
+def drop_database(db_host, db_port, db_user, db_name)
+  drop_cmd = ['dropdb', '--force', '--if-exists', '-h', db_host, "--username=#{db_user}", '-e']
+  drop_cmd += ['-p', db_port] if db_port
+  drop_cmd += [db_name]
+  puts "Dropping database #{db_name}..."
+  drop_output, drop_err, drop_status = Open3.capture3(*drop_cmd)
+  puts "Database #{db_name} dropped" if drop_status.success?
+end
+
+def rename_db(db_host_port, db_user, db_name, db_name_new)
+  puts "Renaming database #{db_name} to #{db_name_new}"
+
+  lock_cmd = ['psql', '-h', db_host_port.split(':').first]
+  lock_cmd += ['-p', db_host_port.split(':').last] if db_host_port.split(':').size > 1
+  lock_cmd += ['-U', db_user, '-d', 'postgres',
+    '-c', "ALTER DATABASE #{db_name} WITH ALLOW_CONNECTIONS false;"
+  ]
+  puts "Locking database #{db_name} against new connections..."
+  lock_out, lock_err, lock_status = Open3.capture3(*lock_cmd)
+  raise "Failed to lock database:\n#{lock_err}" unless lock_status.success?
+
+  terminate_cmd = ['psql', '-h', db_host_port.split(':').first, '-d', 'postgres']
+  terminate_cmd += ['-p', db_host_port.split(':').last] if db_host_port.split(':').size > 1
+  terminate_cmd += ['-U', db_user]
+  terminate_cmd += [
+    '-c',
+    %Q(
+      SELECT pg_terminate_backend(pid)
+      FROM pg_stat_activity
+      WHERE datname = '#{db_name}' AND pid <> pg_backend_pid();
+    )
+  ]
+  puts "Terminating active connections to #{db_name}..."
+  terminate_output, terminate_err, terminate_status = Open3.capture3(*terminate_cmd)
+  raise "Failed to terminate connections:\n#{terminate_err}" unless terminate_status.success?
+
+  rename_cmd = ['psql', '-h', db_host_port.split(':').first]
+  rename_cmd += ['-p', db_host_port.split(':').last] if db_host_port.split(':').size > 1
+  rename_cmd += ['-U', db_user, '-c', "ALTER DATABASE #{db_name} RENAME TO #{db_name_new}"]
+  rename_output, rename_err, rename_status = Open3.capture3(*rename_cmd)
+  puts "Database #{db_name} renamed to #{db_name_new}" if rename_status.success?
+  raise "Database renaming failed:\n#{rename_err}" unless rename_status.success?
+
+  unlock_cmd = ['psql', '-h', db_host_port.split(':').first]
+  unlock_cmd += ['-p', db_host_port.split(':').last] if db_host_port.split(':').size > 1
+  unlock_cmd += ['-U', db_user, '-d', 'postgres',
+    '-c', "ALTER DATABASE #{db_name_new} WITH ALLOW_CONNECTIONS true;"
+  ]
+  puts "Re-enabling connections to #{db_name_new}..."
+  unlock_out, unlock_err, unlock_status = Open3.capture3(*unlock_cmd)
+  raise "Failed to unlock database:\n#{unlock_err}" unless unlock_status.success?
 end
