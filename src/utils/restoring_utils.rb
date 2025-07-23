@@ -1,4 +1,5 @@
 require 'open3'
+require 'sequel'
 
 def restore_by_dump(backup_path, database_name)
   puts "Restoring backup at #{Time.now} by dump #{backup_path}"
@@ -49,10 +50,11 @@ def restore_by_dump(backup_path, database_name)
 
   if db_name == default_db_name
     # If the database name is the same as the default database name, we will restore the backup into a new database then rename it to the default database name
-    puts "You specified the same database as the origin one. We will restore it in the origin database"
+    puts "You specified the same database as the origin one. This dump will re-create the database and restore the backup into it"
     puts "Creating new database #{db_name + RESTORE_IN_ORIGIN_DB_SUFFIX} and restoring backup into it"
+    drop_database(db_host, db_port, db_user, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX)
     create_and_restore(db_host, db_port, db_user, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, backup_path)
-    drop_database(db_host, db_port, db_user, db_name + OLD_DB_SUFFIX)
+    drop_database(db_host, db_port, db_user, db_name)
     rename_db(db_host_port, db_user, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, db_name)
   else
     # Drop database if it exists
@@ -118,43 +120,47 @@ end
 def rename_db(db_host_port, db_user, db_name, db_name_new)
   puts "Renaming database #{db_name} to #{db_name_new}"
 
-  lock_cmd = ['psql', '-h', db_host_port.split(':').first]
-  lock_cmd += ['-p', db_host_port.split(':').last] if db_host_port.split(':').size > 1
-  lock_cmd += ['-U', db_user, '-d', 'postgres',
-    '-c', "ALTER DATABASE #{db_name} WITH ALLOW_CONNECTIONS false;"
-  ]
-  puts "Locking database #{db_name} against new connections..."
-  lock_out, lock_err, lock_status = Open3.capture3(*lock_cmd)
-  raise "Failed to lock database:\n#{lock_err}" unless lock_status.success?
+  host, port = db_host_port.split(':')
+  port ||= '5432'
 
-  terminate_cmd = ['psql', '-h', db_host_port.split(':').first, '-d', 'postgres']
-  terminate_cmd += ['-p', db_host_port.split(':').last] if db_host_port.split(':').size > 1
-  terminate_cmd += ['-U', db_user]
-  terminate_cmd += [
-    '-c',
-    %Q(
-      SELECT pg_terminate_backend(pid)
-      FROM pg_stat_activity
-      WHERE datname = '#{db_name}' AND pid <> pg_backend_pid();
-    )
-  ]
-  puts "Terminating active connections to #{db_name}..."
-  terminate_output, terminate_err, terminate_status = Open3.capture3(*terminate_cmd)
-  raise "Failed to terminate connections:\n#{terminate_err}" unless terminate_status.success?
+  # Connect to the 'postgres' DB to manage the target DB
+  db = Sequel.connect(
+    adapter: 'postgres',
+    host: host,
+    port: port,
+    user: db_user,
+    database: 'postgres'
+  # password: 'your_password' # optionally add authentication
+  )
 
-  rename_cmd = ['psql', '-h', db_host_port.split(':').first]
-  rename_cmd += ['-p', db_host_port.split(':').last] if db_host_port.split(':').size > 1
-  rename_cmd += ['-U', db_user, '-c', "ALTER DATABASE #{db_name} RENAME TO #{db_name_new}"]
-  rename_output, rename_err, rename_status = Open3.capture3(*rename_cmd)
-  puts "Database #{db_name} renamed to #{db_name_new}" if rename_status.success?
-  raise "Database renaming failed:\n#{rename_err}" unless rename_status.success?
+  begin
+    db.transaction do
+      puts "Locking database #{db_name} against new connections..."
+      db.run("ALTER DATABASE #{db_name} WITH ALLOW_CONNECTIONS false;")
 
-  unlock_cmd = ['psql', '-h', db_host_port.split(':').first]
-  unlock_cmd += ['-p', db_host_port.split(':').last] if db_host_port.split(':').size > 1
-  unlock_cmd += ['-U', db_user, '-d', 'postgres',
-    '-c', "ALTER DATABASE #{db_name_new} WITH ALLOW_CONNECTIONS true;"
-  ]
-  puts "Re-enabling connections to #{db_name_new}..."
-  unlock_out, unlock_err, unlock_status = Open3.capture3(*unlock_cmd)
-  raise "Failed to unlock database:\n#{unlock_err}" unless unlock_status.success?
+      puts "Terminating active connections to #{db_name}..."
+      db.run(%Q(
+        SELECT pg_terminate_backend(pid)
+        FROM pg_stat_activity
+        WHERE datname = '#{db_name}' AND pid <> pg_backend_pid();
+      ))
+
+      puts "Renaming database #{db_name} to #{db_name_new}..."
+      db.run("ALTER DATABASE #{db_name} RENAME TO #{db_name_new};")
+    end
+
+    puts "Database #{db_name} successfully renamed to #{db_name_new}"
+
+  rescue => e
+    raise "Database renaming failed:\n#{e.message}"
+  ensure
+    begin
+      puts "Re-enabling connections to #{db_name_new}..."
+      db.run("ALTER DATABASE #{db_name_new} WITH ALLOW_CONNECTIONS true;")
+    rescue => e
+      raise "Failed to unlock database:\n#{e.message}"
+    ensure
+      db.disconnect
+    end
+  end
 end

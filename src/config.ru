@@ -8,7 +8,7 @@ require_relative 'utils/restoring_utils'
 
 $last_backup_report = { status_code: 0, message: '', error_message: '', time: Time.now }
 $last_rsync_reports = []
-RESTORE_IN_ORIGIN_DB_SUFFIX = "_restore_in_origin_db"
+RESTORE_IN_ORIGIN_DB_SUFFIX = "_temp"
 OLD_DB_SUFFIX = "_old"
 
 BACKUPS_DIR = ENV['DEBUG'].nil? ? '/backups' : './backups'
