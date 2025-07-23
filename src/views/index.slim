@@ -13,9 +13,18 @@ ruby:
                   error_message = "Error when extracting backups structure:\n#{e}"
                   nil
                 end
+  default_db_url = ENV['DB_URL'] # postgres://settlements:settlements@settlements_settlements_db/settlements?sslmode=disable
+  default_user_password = default_db_url.split('@').first.split('//').last
+  default_db_user = default_user_password.split(':').first
+  default_db_host_port = default_db_url.split('@').last.split('/').first
+
+  db_user = ENV['RESTORE_TARGET_USER']
+  db_user ||= default_db_user
+  db_host_port = ENV['RESTORE_TARGET_HOST_PORT']
+  db_host_port ||= default_db_host_port
 javascript:
-    let restoring_host_port = `#{{ENV['RESTORE_TARGET_HOST_PORT'].to_s}}`;
-    let restoring_user = `#{{ENV['RESTORE_TARGET_USER']}}`;
+    let restoring_host_port = `#{{db_host_port.to_s}}`;
+    let restoring_user = `#{{db_user}}`;
     let char_limit = 100;
 
     function createConfirmationDialog(confirmationCallbackString, confirmationHTML) {

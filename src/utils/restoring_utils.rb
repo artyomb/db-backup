@@ -2,13 +2,23 @@ require 'open3'
 
 def restore_by_dump(backup_path, database_name)
   puts "Restoring backup at #{Time.now} by dump #{backup_path}"
+  default_db_url = ENV['DB_URL'] # postgres://settlements:settlements@settlements_settlements_db/settlements?sslmode=disable
+  default_user_password = default_db_url.split('@').first.split('//').last
+  default_db_user = default_user_password.split(':').first
+  default_db_password = default_user_password.split(':').last
+  default_db_name = default_db_url.split('?').first.split('/').last
+  default_db_host_port = default_db_url.split('@').last.split('/').first
   db_host_port     = ENV['RESTORE_TARGET_HOST_PORT']
+  db_host_port ||= default_db_host_port
   raise "Target database host and port are not specified" if db_host_port.nil?
   db_host = db_host_port.split(':').first
   db_port = db_host_port.split(':').last if db_host_port.split(':').size > 1
   db_user     = ENV['RESTORE_TARGET_USER']
+  db_user     ||= default_db_user
   db_password = ENV['RESTORE_TARGET_PASSWORD']
+  db_password ||= default_db_password
   db_name     = database_name || "temporary_db"
+  db_name     ||= default_db_name
   missing_vars = []
   missing_vars << 'RESTORE_TARGET_HOST_PORT' if db_host_port.nil?
   missing_vars << 'RESTORE_TARGET_USER' if db_user.nil?
