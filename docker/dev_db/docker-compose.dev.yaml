@@ -1,0 +1,43 @@
+services:
+  arinc_db:
+    image: postgres:16
+    ports:
+      - 5433:5432
+    volumes:
+      - /home/roman/IdeaProjects/RubyProjects/db-backup/docker/postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=arinc
+      - POSTGRES_PASSWORD=arinc
+      - POSTGRES_DB=arinc
+  backup_service:
+    depends_on:
+      - arinc_db
+    build:
+      context: ../../src
+      dockerfile: ../docker/ruby/Dockerfile
+    volumes:
+      - ../../src/backups:/backups
+    environment:
+      - DB_URL=postgres://arinc:arinc@arinc_db/arinc?sslmode=disable
+      - BACKUP_INTERVAL=60
+    ports:
+      - 7000:7000
+  pgweb:
+    image: sosedoff/pgweb
+    restart: always
+    depends_on:
+      - arinc_db
+    ports:
+      - 8082:8081
+    environment:
+      - PGWEB_DATABASE_URL=postgres://arinc:arinc@arinc_db:5432/arinc?sslmode=disable
+
+  pgweb_temp:
+    image: sosedoff/pgweb
+    restart: always
+    depends_on:
+      - arinc_db
+    ports:
+      - 8083:8081
+    environment:
+      - PGWEB_DATABASE_URL=postgres://arinc:arinc@arinc_db:5432/arinc_temp?sslmode=disable

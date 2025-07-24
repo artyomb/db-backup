@@ -18,6 +18,7 @@ ruby:
   default_db_user = default_user_password.split(':').first
   default_db_host_port = default_db_url.split('@').last.split('/').first
 
+
   db_user = ENV['RESTORE_TARGET_USER']
   db_user ||= default_db_user
   db_host_port = ENV['RESTORE_TARGET_HOST_PORT']
@@ -351,7 +352,7 @@ sass:
         box-shadow: 0 1px 2px rgba(0,0,0,0.1)
 div
   .flex.justify-content-space-between
-    h1.vertical-margin-big Backups
+    h1.vertical-margin-big DB Backups
     .margin-big.flex.align-items-center
       .font-weight-bold.margin-right Force backup
       .action-box-big.primary-action-background.text-align-center.align-content-center.margin-right-big.cursor-pointer.font-size-bigger onclick="callForceBackupDialog()"="▷"
