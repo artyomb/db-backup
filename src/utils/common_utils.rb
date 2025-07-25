@@ -23,45 +23,24 @@ def calculate_dir_size(dir_path)
   total_size
 end
 
-def extract_backups_dir_structure
-  root_path = BACKUPS_DIR
-  structure = {}
-  Dir.glob("#{root_path}/*").each do |path|
-    if !File.directory?(path)
-      structure[File.basename(path)] = { is_dir: false, size: File.size(path) }
-      next
-    end
+def extract_backups_dir_structure(root_path)
+  structure = { size: 0 }
+  children = Dir.children(root_path)
+  children.each do |child|
+    path = File.join(root_path, child)
+    next if File.directory?(path) || !path.end_with?(".sql.gz")
     name = File.basename(path)
-    structure[name] = { is_dir: true, size: calculate_dir_size(path) }
-
-    Dir.glob("#{path}/**/*").each do |file_path|
-      relative_path = file_path.sub("#{path}/", '')
-      parts = relative_path.split('/')
-      current = structure[name]
-
-      parts.each_with_index do |part, index|
-        if index == parts.size - 1
-          if File.directory?(file_path)
-            current[part] = { is_dir: true, size: calculate_dir_size(file_path) }
-          else
-            current[part] = { size: File.size(file_path) }
-          end
-        else
-          current[part] ||= { is_dir: true, size: 0 }
-          current = current[part]
-        end
-      end
-    end
+    structure[name] = { is_dir: false, size: File.size(path), path: path }
+    structure[:size] += structure[name][:size]
   end
-  structure[:size] = calculate_dir_size(root_path)
   structure
 end
 
-def extract_sql_by_backup(backup_path)
-  puts "Extracting SQL content from backup: #{backup_path}"
+def extract_sql_by_backup(full_backup_path)
+  puts "Extracting SQL content from backup: #{full_backup_path}"
   upper_limit = 100000
   begin
-    gz_path = File.join(BACKUPS_DIR, backup_path)
+    gz_path = full_backup_path
     sql_content = nil
 
     Zlib::GzipReader.open(gz_path) do |gz|

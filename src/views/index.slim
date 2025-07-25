@@ -8,7 +8,14 @@ ruby:
   require_relative '../utils/common_utils'
   structure ||= begin
                   puts "Extracting backups structure..."
-                  extract_backups_dir_structure
+                  extract_backups_dir_structure(BACKUPS_DIR)
+                rescue Exception => e
+                  error_message = "Error when extracting backups structure:\n#{e}"
+                  nil
+                end
+  structure_uploaded ||= begin
+                  puts "Extracting backups structure..."
+                  extract_backups_dir_structure(UPLOADED_BACKUPS_DIR)
                 rescue Exception => e
                   error_message = "Error when extracting backups structure:\n#{e}"
                   nil
@@ -23,6 +30,9 @@ ruby:
   db_user ||= default_db_user
   db_host_port = ENV['RESTORE_TARGET_HOST_PORT']
   db_host_port ||= default_db_host_port
+
+  default_db_name = default_db_url.split('?').first.split('/').last
+
 javascript:
     let restoring_host_port = `#{{db_host_port.to_s}}`;
     let restoring_user = `#{{db_user}}`;
@@ -71,13 +81,13 @@ javascript:
     }
 
     function closeConfirmationDialog() {
-        document.querySelector(".dialog-overlay").remove();
+        document.querySelector(".dialog-overlay")?.remove();
         console.log("Confirmation dialog closed");
     }
 
     function showNotification(isSuccess, notificationMessage) {
         const notification = document.createElement("div");
-        document.querySelector(".dialog-overlay").remove();
+        document.querySelector(".dialog-overlay")?.remove();
         notification.className = `notification ${isSuccess ? 'success' : 'error'}`;
         Object.assign(notification.style, {
             position: "fixed",
@@ -247,13 +257,48 @@ javascript:
             element.innerHTML = date.toLocaleString('en-US', options);
         });
     });
+
+    async function uploadDump() {
+        const fileInput = document.getElementById('fileInput');
+
+        if (!fileInput.files.length) {
+            showNotification(false, 'Please select a file.');
+            return;
+        }
+
+        const file = fileInput.files[0];
+        const filename = file.name;
+
+        if (!filename.toLowerCase().endsWith('.sql') && !filename.toLowerCase().endsWith('.zip') && !filename.toLowerCase().endsWith('.rar') && !filename.toLowerCase().endsWith('.gz')) {
+            showNotification(false, 'You are trying to upload file with unsupported extension');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const response = await fetch('dumps', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            showNotification(response.status == 200, JSON.stringify(result));
+
+            if (response.status == 200) {
+                document.getElementById('fileInput').value = '';
+            }
+        } catch (error) {
+            showNotification(false, `An error occurred while sending the file: ${error.message}`);
+        }
+    }
 sass:
   .hdr-container
     padding-bottom: 1rem
     padding-right: 1rem
     position: sticky
     top: 0
-  #directory-structure-container
+  .directory-structure-container
     flex: 1
     flex-basis: 50%
     .file-structure
@@ -290,7 +335,7 @@ sass:
     color: black
 
   .content-container
-    height: 80vh
+    height: fit-content
     display: flex
     flex-direction: row
     column-gap: 1rem
@@ -307,6 +352,10 @@ sass:
     padding: 0.5rem
   .width-half
     width: 50% !important
+
+  .upload-dump-button
+    width: 80%
+    max-width: 25rem
 
   .download-icon
     display: inline-block
@@ -330,6 +379,9 @@ sass:
       transform: translateY(1px)
       box-shadow: 0 1px 2px rgba(0,0,0,0.1)
 
+  .disable-hover-change
+    &:hover
+      background-color: unset
   .restore-icon
       display: inline-block
       margin-right: 0.5rem
@@ -350,6 +402,13 @@ sass:
       &:active
         transform: translateY(1px)
         box-shadow: 0 1px 2px rgba(0,0,0,0.1)
+  .upload-data-row
+    background-color: aliceblue
+    &:hover
+      background-color: #cde7ff
+  .padding-vertical-small
+    padding-top: 0.75rem
+    padding-bottom: 0.75rem
 div
   .flex.justify-content-space-between
     h1.vertical-margin-big DB Backups
@@ -396,9 +455,25 @@ h2 Latest DB backup status report (if message is too big, press ctrl+click to ex
 
   - else
     h2 No RSYNC_TARGETS defined in environment. So no backups will be sent with rsync.
+- render_structure = ->(structure, parent_path = '', parent_id = 'root', counter = 0) do
+  - structure&.select{|n, c| !(c.is_a?(Hash) && c[:is_dir]) && n != :size && c.is_a?(Hash) }.each do |name, content|
+    tr.file-element data-href="file-in-archive/#{content[:path]}"
+      - current_id = "node_#{parent_id}_#{counter}"
+      td
+        span
+        = " #{name}"
+      td
+        span.time.float-right #{determine_backup_time(name)}
+      td
+        span.float-right #{represent_size(content[:size])}
+      td
+        span.restore-icon.text-align-center.align-content-center.action-box data-href="restore-by-dump/#{content[:path]}"= "↺"
+        a.download-icon.text-align-center.align-content-center.action-box href="dumps/#{content[:path]}" download=""= "↓"
+    - counter += 1
 h3.margin-remove-top= "Total size: #{represent_size(structure[:size])}"
 .content-container
-  #directory-structure-container
+  .directory-structure-container
+    h3= "Database \"#{default_db_name}\" dumps"
     table.vertical-margin style="font-size: 1rem"
       thead
         tr
@@ -407,22 +482,23 @@ h3.margin-remove-top= "Total size: #{represent_size(structure[:size])}"
           td.table-header.text-align-right= "Size"
           td.table-header style="width: 1%"= "Actions"
       tbody
-      - render_structure = ->(structure, parent_path = '', parent_id = 'root', counter = 0) do
-        - structure&.select{|n, c| !(c.is_a?(Hash) && c[:is_dir]) && n != :size && c.is_a?(Hash) }.each do |name, content|
-          tr.file-element data-href="file-in-archive/#{name}"
-            - current_path = "#{parent_path}/#{name}"
-            - current_id = "node_#{parent_id}_#{counter}"
-            td
-              span
-              = " #{name}"
-            td
-              span.time.float-right #{determine_backup_time(name)}
-            td
-              span.float-right #{represent_size(content[:size])}
-            td
-              span.restore-icon.text-align-center.align-content-center.action-box data-href="restore-by-dump/#{name}"= "↺"
-              a.download-icon.text-align-center.align-content-center.action-box href="download-dump-archive/#{name}" download=""= "↓"
-          - counter += 1
-
       - render_structure.call(structure)
+    br
+    h3 Externally loaded dumps
+    table.vertical-margin style="font-size: 1rem"
+      thead
+        tr
+          td.table-header= "Files"
+          td.table-header.text-align-right= "Backup datetime"
+          td.table-header.text-align-right= "Size"
+          td.table-header style="width: 1%"= "Actions"
+      tbody
+      - render_structure.call(structure_uploaded)
+      tr.disable-hover-change.upload-data-row
+        td.text-align-center.padding-vertical-small colspan="4"
+          input type="file" id="fileInput"
+          button.upload-dump-button onclick="uploadDump()"= "Upload Dump"
+          / form#uploadForm enctype="multipart/form-data"
+          /   label for="comments" Comments:
+          /   textarea#comments name="comments" rows="4"
   #file-area.base-padding.content-display.width-half Choose file to view content

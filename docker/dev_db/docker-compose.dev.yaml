@@ -17,6 +17,7 @@ services:
       dockerfile: ../docker/ruby/Dockerfile
     volumes:
       - ../../src/backups:/backups
+      - ../../src/uploaded_backups:/uploaded_backups
     environment:
       - DB_URL=postgres://arinc:arinc@arinc_db/arinc?sslmode=disable
       - BACKUP_INTERVAL=60
