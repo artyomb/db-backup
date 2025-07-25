@@ -11,6 +11,7 @@ ruby:
                   extract_backups_dir_structure(BACKUPS_DIR)
                 rescue Exception => e
                   error_message = "Error when extracting backups structure:\n#{e}"
+                  puts error_message
                   nil
                 end
   structure_uploaded ||= begin
@@ -18,6 +19,7 @@ ruby:
                   extract_backups_dir_structure(UPLOADED_BACKUPS_DIR)
                 rescue Exception => e
                   error_message = "Error when extracting backups structure:\n#{e}"
+                  puts error_message
                   nil
                 end
   default_db_url = ENV['DB_URL'] # postgres://settlements:settlements@settlements_settlements_db/settlements?sslmode=disable
@@ -456,20 +458,22 @@ h2 Latest DB backup status report (if message is too big, press ctrl+click to ex
   - else
     h2 No RSYNC_TARGETS defined in environment. So no backups will be sent with rsync.
 - render_structure = ->(structure, parent_path = '', parent_id = 'root', counter = 0) do
-  - structure&.select{|n, c| !(c.is_a?(Hash) && c[:is_dir]) && n != :size && c.is_a?(Hash) }.each do |name, content|
-    tr.file-element data-href="file-in-archive/#{content[:path]}"
-      - current_id = "node_#{parent_id}_#{counter}"
-      td
-        span
-        = " #{name}"
-      td
-        span.time.float-right #{determine_backup_time(name)}
-      td
-        span.float-right #{represent_size(content[:size])}
-      td
-        span.restore-icon.text-align-center.align-content-center.action-box data-href="restore-by-dump/#{content[:path]}"= "↺"
-        a.download-icon.text-align-center.align-content-center.action-box href="dumps/#{content[:path]}" download=""= "↓"
-    - counter += 1
+  - selected = structure&.select{|n, c| !(c.is_a?(Hash) && c[:is_dir]) && n != :size && c.is_a?(Hash) }
+  - unless selected == nil
+    - selected.each do |name, content|
+      tr.file-element data-href="file-in-archive/#{content[:path]}"
+        - current_id = "node_#{parent_id}_#{counter}"
+        td
+          span
+          = " #{name}"
+        td
+          span.time.float-right #{determine_backup_time(name)}
+        td
+          span.float-right #{represent_size(content[:size])}
+        td
+          span.restore-icon.text-align-center.align-content-center.action-box data-href="restore-by-dump/#{content[:path]}"= "↺"
+          a.download-icon.text-align-center.align-content-center.action-box href="dumps/#{content[:path]}" download=""= "↓"
+      - counter += 1
 h3.margin-remove-top= "Total size: #{represent_size(structure[:size])}"
 .content-container
   .directory-structure-container
