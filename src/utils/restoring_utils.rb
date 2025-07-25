@@ -31,7 +31,7 @@ def restore_by_dump(backup_path, database_name)
   File.write(pg_path, "#{db_host_port}:*:#{db_user}:#{db_password}\n")
   File.chmod(0600, pg_path)
   ENV['PGPASSFILE'] = pg_path
-  puts "PGPASSFILE updated: #{File.read(ENV['PGPASSFILE'])}"
+  # puts "PGPASSFILE updated: #{File.read(ENV['PGPASSFILE'])}"
   # usr = system("whoami")
 
   # check_cmd = ['psql', '-h', db_host_port.split(':').first]
@@ -155,8 +155,8 @@ def create_and_restore_sequel(sequel_connection, db_name, db_password, backup_pa
 
   # Extract and restore the backup
   begin
-    gzip_file_path = File.join(BACKUPS_DIR, backup_path)
-    sql_file = File.join(BACKUPS_DIR, File.basename(backup_path, '.gz'))
+    gzip_file_path = backup_path
+    sql_file = File.join(File.dirname(backup_path), File.basename(backup_path.split('/').last, '.gz'))
 
     # Extract .gz file to .sql
     puts "Extracting backup file #{backup_path}..."
