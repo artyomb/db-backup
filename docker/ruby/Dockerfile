@@ -42,6 +42,7 @@ WORKDIR /app
 # --start_period=5s (Unknown flag: start_period)
 # HEALTHCHECK --interval=15s --timeout=2s --retries=3 CMD curl --fail http://127.0.0.1:$PORT/healthcheck || exit 1
 RUN mkdir -p /backups
+RUN mkdir -p /uploaded_backups
 RUN chmod +x /app/backup.sh
 
 CMD ls && bundle exec rackup -o 0.0.0.0 -p $PORT -s falcon
