@@ -153,6 +153,19 @@ def create_and_restore_sequel(sequel_connection, db_name, db_password, backup_pa
     raise "Database creation failed: #{e.message}"
   end
 
+  # # Connect to the newly created database and install postgis extention
+  # new_db_url = sequel_connection.opts[:uri].sub(%r{/[^/]+$}, "/#{db_name}")
+  # puts "Connecting to new database #{db_name} to install PostGIS..."
+  # begin
+  #   new_db_connection = Sequel.connect(new_db_url)
+  #   new_db_connection.run("CREATE EXTENSION IF NOT EXISTS postgis;")
+  #   puts "PostGIS extension created successfully in #{db_name}."
+  # rescue Sequel::DatabaseError => e
+  #   raise "Failed to create PostGIS extension: #{e.message}"
+  # ensure
+  #   new_db_connection.disconnect if new_db_connection
+  # end
+
   # Extract and restore the backup
   begin
     gzip_file_path = backup_path
@@ -176,11 +189,14 @@ def create_and_restore_sequel(sequel_connection, db_name, db_password, backup_pa
     # Run restore
     env = ENV.to_h.merge('PGPASSWORD' => db_password)
     restore_out, restore_err, restore_status = Open3.capture3(env, *restore_cmd)
+    restore_out = restore_out[0, 250]
+    restore_err = restore_err[0, 250]
 
-    if restore_status.success?
+    if restore_status.success? && restore_err.empty?
       puts "Database restored successfully."
       return "Database restored successfully."
     else
+      puts"Restore out:\n#{restore_out}"
       puts "Error restoring database: #{restore_err}"
       raise "Restore failed: #{restore_err}"
     end
