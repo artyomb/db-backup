@@ -73,13 +73,13 @@ def restore_by_dump(backup_path, database_name)
       # rename_db(db_host_port, db_user, db_password, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, db_name)
       # NEW PIPELINE
       drop_database_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX)
-      create_and_restore_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, db_password, backup_path)
+      create_message = create_and_restore_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, db_password, backup_path)
       sequel_connection.transaction do
         rename_db_sequel(sequel_connection, db_name, db_name + OLD_DB_SUFFIX)
         rename_db_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, db_name)
       end
       drop_database_sequel(sequel_connection, db_name + OLD_DB_SUFFIX)
-      message = "Successfully restored dump into #{db_name}"
+      message = "Creating DB message:\n#{create_message}\nSuccessfully restored dump into #{db_name}"
     else
       # OLD PIPELINE
       # Drop database if it exists
@@ -87,8 +87,8 @@ def restore_by_dump(backup_path, database_name)
       # create_and_restore(db_host, db_port, db_user, db_name, backup_path) if db_name != default_db_name
       # NEW PIPELINE
       drop_database_sequel(sequel_connection, db_name)
-      create_and_restore_sequel(sequel_connection, db_name, db_password, backup_path)
-      message = "Successfully restored dump into #{db_name}"
+      create_message = create_and_restore_sequel(sequel_connection, db_name, db_password, backup_path)
+      message = "Creating DB message:\n#{create_message}\nSuccessfully restored dump into #{db_name}"
     end
   rescue => e
     message = "Failed to restore #{db_name}:\n#{e.message}"
@@ -192,9 +192,10 @@ def create_and_restore_sequel(sequel_connection, db_name, db_password, backup_pa
     restore_out = restore_out[0, 1000]
     restore_err = restore_err[0, 1000]
 
-    if restore_status.success? && restore_err.empty?
-      puts "Database restored successfully."
-      return "Database restored successfully."
+    if restore_status.success?
+      message = "Database restored successfully." + (restore_err.empty? ? '' : "\nWARN MESSAGE AFTER RESTORE:\n#{restore_err}")
+      puts message
+      return message
     else
       puts"Restore out:\n#{restore_out}"
       puts "Error restoring database: #{restore_err}"
