@@ -467,7 +467,12 @@ h2 Latest DB backup status report (if message is too big, press ctrl+click to ex
           span
           = " #{name}"
         td
-          span.time.float-right #{determine_backup_time(name)}
+          - begin
+            - backup_time = determine_backup_time(name)
+          - rescue => e
+            - puts(e.message)
+            - backup_time = "UNKNOWN"
+          span.time.float-right #{backup_time}
         td
           span.float-right #{represent_size(content[:size])}
         td

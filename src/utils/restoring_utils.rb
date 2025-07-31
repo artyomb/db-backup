@@ -189,8 +189,8 @@ def create_and_restore_sequel(sequel_connection, db_name, db_password, backup_pa
     # Run restore
     env = ENV.to_h.merge('PGPASSWORD' => db_password)
     restore_out, restore_err, restore_status = Open3.capture3(env, *restore_cmd)
-    restore_out = restore_out[0, 250]
-    restore_err = restore_err[0, 250]
+    restore_out = restore_out[0, 1000]
+    restore_err = restore_err[0, 1000]
 
     if restore_status.success? && restore_err.empty?
       puts "Database restored successfully."
