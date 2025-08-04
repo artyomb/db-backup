@@ -197,6 +197,7 @@ javascript:
         try {
             const response = await fetch('invoke-force-backup', {
                 method: 'POST',
+                credentials: 'same-origin'
             });
             isSuccess = response.ok;
             notificationMessage = await response.text();
@@ -495,7 +496,7 @@ h2 Latest DB backup status report (if message is too big, press ctrl+click to ex
 - render_structure = ->(structure, parent_path = '', parent_id = 'root', counter = 0) do
   - selected = structure&.select{|n, c| !(c.is_a?(Hash) && c[:is_dir]) && n != :size && c.is_a?(Hash) }
   - unless selected == nil
-    - selected.each do |name, content|
+    - selected.sort_by { |name, _content| name }.reverse.each do |name, content|
       tr.file-element data-href="file-in-archive/#{content[:path]}" id="#{content[:path]}"
         td
           span
@@ -514,7 +515,7 @@ h2 Latest DB backup status report (if message is too big, press ctrl+click to ex
           span.restore-icon.text-align-center.align-content-center.action-box data-href="restore-by-dump/#{content[:path]}"= "↺"
           a.download-icon.text-align-center.align-content-center.action-box href="dumps/#{content[:path]}" download=""= "↓"
       - counter += 1
-h3.margin-remove-top= "Total size: #{represent_size(structure[:size])}"
+h3.margin-remove-top= "Total size: #{represent_size(structure[:size] + structure_uploaded[:size])}"
 .content-container
   .directory-structure-container
     h3= "Database \"#{default_db_name}\" dumps"
