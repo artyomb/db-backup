@@ -148,10 +148,19 @@ javascript:
     }
 
     async function callForceBackupDialog() {
-        const confirmationCallbackString = "submitForceBackup()";
+        const confirmationCallbackString = "submitDeleteBackup()";
         const confimationHTML = `
                 <h2>Force Backup Confirmation</h2>
                 <p>Are you sure you want to invoke backup pipeline?</p>
+                `;
+        createConfirmationDialog(confirmationCallbackString, confimationHTML);
+    }
+
+    async function callDeleteBackupDialog(backupPath) {
+        const confirmationCallbackString = `submitDeleteBackup('${backupPath}')`;
+        const confimationHTML = `
+                <h2>Delete backup confirmation</h2>
+                <p>Are you sure you want to delete backup?</p>
                 `;
         createConfirmationDialog(confirmationCallbackString, confimationHTML);
     }
@@ -198,11 +207,33 @@ javascript:
         showNotification(isSuccess, notificationMessage);
     }
 
+    async function submitDeleteBackup(elementPath) {
+        console.log("Delete backups submitted");
+        showLoadingInDialog("Deleting backup...");
+        let isSuccess;
+        let notificationMessage;
+        try {
+            const iconElement = document.getElementById(elementPath);
+            const response = await fetch(`dumps${elementPath}`, {
+                method: 'DELETE',
+            });
+            isSuccess = response.ok;
+            notificationMessage = await response.text();
+            if (isSuccess) iconElement.remove();
+        } catch (error) {
+            isSuccess = false;
+            notificationMessage = error.message;
+        }
+        showNotification(isSuccess, notificationMessage);
+    }
+
+
+
 
     document.addEventListener("DOMContentLoaded", function() {
         const fileViewArea = document.getElementById("file-area");
 
-        document.querySelectorAll(".file-element").forEach(function(fileElement) {
+        document.querySelectorAll(".file-element").forEach(async function(fileElement) {
             fileElement.addEventListener("click", async function (event) {
                 if (event.target.classList.contains('restore-icon')) {
                     const iconElement = event.target;
@@ -279,7 +310,10 @@ javascript:
         const formData = new FormData();
         formData.append('file', file);
 
+        const btn = document.getElementById("uploadDumpButton");
+
         try {
+            btn.disabled = true;
             const response = await fetch('dumps', {
                 method: 'POST',
                 body: formData
@@ -293,6 +327,7 @@ javascript:
         } catch (error) {
             showNotification(false, `An error occurred while sending the file: ${error.message}`);
         }
+        btn.disabled = false;
     }
 sass:
   .hdr-container
@@ -461,8 +496,7 @@ h2 Latest DB backup status report (if message is too big, press ctrl+click to ex
   - selected = structure&.select{|n, c| !(c.is_a?(Hash) && c[:is_dir]) && n != :size && c.is_a?(Hash) }
   - unless selected == nil
     - selected.each do |name, content|
-      tr.file-element data-href="file-in-archive/#{content[:path]}"
-        - current_id = "node_#{parent_id}_#{counter}"
+      tr.file-element data-href="file-in-archive/#{content[:path]}" id="#{content[:path]}"
         td
           span
           = " #{name}"
@@ -476,6 +510,7 @@ h2 Latest DB backup status report (if message is too big, press ctrl+click to ex
         td
           span.float-right #{represent_size(content[:size])}
         td
+          span.remove-icon.text-align-center.align-content-center.action-box onclick="callDeleteBackupDialog('#{content[:path]}')"= "🗑️"
           span.restore-icon.text-align-center.align-content-center.action-box data-href="restore-by-dump/#{content[:path]}"= "↺"
           a.download-icon.text-align-center.align-content-center.action-box href="dumps/#{content[:path]}" download=""= "↓"
       - counter += 1
@@ -506,7 +541,7 @@ h3.margin-remove-top= "Total size: #{represent_size(structure[:size])}"
       tr.disable-hover-change.upload-data-row
         td.text-align-center.padding-vertical-small colspan="4"
           input type="file" id="fileInput"
-          button.upload-dump-button onclick="uploadDump()"= "Upload Dump"
+          button.upload-dump-button id="uploadDumpButton" onclick="uploadDump()"= "Upload Dump"
           / form#uploadForm enctype="multipart/form-data"
           /   label for="comments" Comments:
           /   textarea#comments name="comments" rows="4"

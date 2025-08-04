@@ -18,6 +18,9 @@ gem 'sequel_pg'
 # gem 'opentelemetry-exporter-otlp'
 # gem 'opentelemetry-instrumentation-all'
 
+gem 'stack-service-base'
+gem 'rubyzip'
+
 group :development do
   gem 'rubocop'
 end

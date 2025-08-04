@@ -1,7 +1,9 @@
 #!/usr/bin/env ruby
 require 'sinatra'
 require 'json'
+require 'zip'
 require 'sinatra/reloader'
+require 'stack-service-base'
 require_relative 'utils/common_utils'
 require_relative 'utils/backup_invocation_utils'
 require_relative 'utils/restoring_utils'
@@ -32,6 +34,14 @@ get '/dumps/*' do
   path_to_file = params[:splat][0]
   path_to_file = '/' + path_to_file if path_to_file[0] != '/'
   send_file(path_to_file)
+end
+
+delete '/dumps/*' do
+  path_to_file = params[:splat][0]
+  path_to_file = '/' + path_to_file if path_to_file[0] != '/'
+  return [400, { message: "Only backup .sql.gz are available for deleting"}.to_json] unless path_to_file.end_with?('.sql.gz')
+  FileUtils.rm_f(path_to_file)
+  return [200, {message: "Backup file #{path_to_file} successfully deleted"}.to_json ]
 end
 
 post '/dumps' do
