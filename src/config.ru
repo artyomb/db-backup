@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+ENV['PERFORMANCE'] = 'true' unless ENV['DEBUG'] == "true"
 require 'sinatra'
 require 'json'
 require 'zip'
@@ -135,7 +136,6 @@ post '/restore-by-dump/*' do
 end
 
 
-log_service_environment_variables
 if ENV['DEBUG'] == "true"
   puts "DEBUG MODE"
   ENV['BACKUP_TARGET_HOST_PRIVATE_KEY'] = nil
@@ -144,10 +144,5 @@ if ENV['DEBUG'] == "true"
 end
 
 Thread.new { start_backups }
+StackServiceBase.rack_setup self if self.respond_to? :use
 run Sinatra::Application
-# TODO:
-# 1. Rework backup policy: if backup for last hour exists, then backup for current hour will be skipped +
-# 2, Change ENVIRONMENT variables +
-# 3. Handle all errors and display them in UI +
-# 4. Add more detailed logging +
-# 5. Improve UI elements +
