@@ -39,6 +39,7 @@ end
 def extract_sql_by_backup(full_backup_path)
   puts "Extracting SQL content from backup: #{full_backup_path}"
   upper_limit = 100000
+  stats = []
   begin
     gz_path = full_backup_path
     sql_content = nil
@@ -46,12 +47,40 @@ def extract_sql_by_backup(full_backup_path)
     Zlib::GzipReader.open(gz_path) do |gz|
       sql_content = gz.read
     end
+    stats = extract_sql_stats(sql_content)
     puts "SQL content extracted successfully."
-    return sql_content[0..(upper_limit-1)] + "\n#{'*' * 150}\nYour content size is too big: #{sql_content.size} chars. It was reduced to #{upper_limit} characters\n#{'*' * 150}" if sql_content.length > upper_limit
+    content = sql_content[0..(upper_limit-1)] + "\n#{'*' * 150}\nYour content size is too big: #{sql_content.size} chars. It was reduced to #{upper_limit} characters\n#{'*' * 150}" if sql_content.length > upper_limit
+    return [content, stats]
   rescue Exception => e
     puts "Error extracting SQL content: #{e}"
     return nil
   end
+end
+
+def extract_sql_stats(sql_content)
+  stats = []
+  tables = []
+
+  # Step 1: Extract table names from CREATE TABLE statements
+  create_table_regex = /CREATE TABLE\s+(?:\w+\.)?"?(\w+)"?\s*\(/i
+  sql_content.scan(create_table_regex) do |match|
+    tables << match[0]
+  end
+
+  # Step 2: For each table, search for COPY statement and count data lines
+  tables.each do |table_name|
+    copy_regex = /COPY\s+(?:\w+\.)?"?#{Regexp.escape(table_name)}"?\s+\(.*?\)\s+FROM\s+stdin;\s*(.*?)\\\.\s*/m
+    match = sql_content.match(copy_regex)
+    if match
+      data_block = match[1]
+      line_count = data_block.lines.reject { |line| line.strip.empty? }.size
+      stats << { table_name: table_name, number_of_records: line_count }
+    else
+      stats << { table_name: table_name, number_of_records: 0 }
+    end
+  end
+
+  stats
 end
 
 def log_service_environment_variables
@@ -88,4 +117,34 @@ def determine_backup_time(filename)
   date_time_string = filename.split('_')[-2..-1].join('').split('.').first
   year, month, day, hour, minute, second = date_time_string[0..3], date_time_string[4..5], date_time_string[6..7], date_time_string[8..9], date_time_string[10..11], date_time_string[12..13]
   Time.new(year, month, day, hour, minute, second, "+00:00")
+end
+
+def render_stats_and_content(content, stats, backup_name)
+  # extention = File.extname(backup_path).delete_prefix('.')
+  extention = 'sql'
+  escaped_content = CGI.escapeHTML(content)
+
+  html = '<div style="display: flex;flex-direction: column">'
+
+  html += '<table class="stats-table">'
+  html += '<thead>'
+  html += '<tr style="background-color: #efef97">'
+  html += "<td colspan=\"2\">Backup #{backup_name} stats</td>"
+  html += '</tr>'
+
+  html += '<tr>'
+  html += '<td>Table name</td>'
+  html += '<td>Number of records</td>'
+  html += '</tr>'
+  html += '</thead>'
+  html += '<tbody>'
+  stats.each do |stat|
+    html += "<tr><td>#{stat[:table_name]}</td><td>#{stat[:number_of_records]}</td></tr>"
+  end
+  html += '</tbody>'
+  html += '</table>'
+
+  html +="<code class='language-#{extention}'>#{escaped_content}</code>"
+  html += '</div>'
+  html
 end

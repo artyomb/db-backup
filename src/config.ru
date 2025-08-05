@@ -23,11 +23,8 @@ get '/index', &-> { slim :index }
 get '/file-in-archive/*' do
   backup_path = params[:splat][0]
   backup_path = '/' + backup_path if backup_path[0] != '/'
-  content = extract_sql_by_backup(backup_path)
-  # extention = File.extname(backup_path).delete_prefix('.')
-  extention = 'sql'
-  escaped_content = CGI.escapeHTML(content)
-  "<code class='language-#{extention}'>#{escaped_content}</code>"
+  content, stats = extract_sql_by_backup(backup_path)
+  render_stats_and_content(content, stats, backup_path.split('/').last)
 end
 
 get '/dumps/*' do
