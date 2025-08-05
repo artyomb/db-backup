@@ -142,6 +142,8 @@ javascript:
             <input type="password" id="password" name="password" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="***" disabled>
             <label for="dbName">Database Name:</label>
             <input type="text" id="dbName" name="dbName" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${backupName.split('.')[0]}">
+            <input type="checkbox" id="replaceOnlyTablesCheckbox" name="replaceOnlyTablesCheckbox" value=>
+            <label for="replaceOnlyTablesCheckbox">Replace only tables data (inconsistency may appear)</label>
         </div>
         `;
         createConfirmationDialog(confirmationCallbackString, confimationHTML);
@@ -168,6 +170,7 @@ javascript:
     async function submitRestore(url) {
         console.log("Restore submitted with URL:", url);
         const dbName = document.getElementById("dbName").value;
+        const replaceOnlyTables = document.getElementById("replaceOnlyTablesCheckbox").checked;
         if (!dbName) {
             alert("Please enter a database name.");
             throw new Error("Please enter a database name.");
@@ -178,7 +181,10 @@ javascript:
         try {
             const response = await fetch(url, {
                 method: 'POST',
-                body: JSON.stringify({database_name: dbName}),
+                body: JSON.stringify({
+                    database_name: dbName,
+                    replace_only_tables: replaceOnlyTables
+                }),
             });
             isSuccess = response.ok;
             notificationMessage = await response.text();

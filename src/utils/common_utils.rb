@@ -49,7 +49,7 @@ def extract_sql_by_backup(full_backup_path)
     end
     stats = extract_sql_stats(sql_content)
     puts "SQL content extracted successfully."
-    content = sql_content[0..(upper_limit-1)] + "\n#{'*' * 150}\nYour content size is too big: #{sql_content.size} chars. It was reduced to #{upper_limit} characters\n#{'*' * 150}" if sql_content.length > upper_limit
+    content = sql_content.length > upper_limit ? sql_content[0..(upper_limit-1)] + "\n#{'*' * 150}\nYour content size is too big: #{sql_content.size} chars. It was reduced to #{upper_limit} characters\n#{'*' * 150}" : sql_content
     return [content, stats]
   rescue Exception => e
     puts "Error extracting SQL content: #{e}"

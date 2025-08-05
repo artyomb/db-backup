@@ -1,7 +1,7 @@
 require 'open3'
 require 'sequel'
 
-def restore_by_dump(backup_path, database_name)
+def restore_by_dump(backup_path, database_name, replace_only_tables=false)
   message = nil
   puts "Restoring backup at #{Time.now} by dump #{backup_path}"
   default_db_url = ENV['DB_URL'] # postgres://settlements:settlements@settlements_settlements_db/settlements?sslmode=disable
@@ -64,28 +64,22 @@ def restore_by_dump(backup_path, database_name)
   puts "Connection created with options #{sequel_connection.opts}"
   begin
     if db_name == default_db_name
-      # If the database name is the same as the default database name, we will restore the backup into a new database then rename it to the default database name
-      puts "You specified the same database as the origin one. Dump will replace original database"
-      # OLD PIPELINE
-      # drop_database(db_host, db_port, db_user, db_password, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX)
-      # create_and_restore(db_host, db_port, db_user, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, backup_path)
-      # drop_database(db_host, db_port, db_user, db_password, db_name)
-      # rename_db(db_host_port, db_user, db_password, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, db_name)
-      # NEW PIPELINE
-      drop_database_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX)
-      create_message = create_and_restore_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, db_password, backup_path)
-      sequel_connection.transaction do
-        rename_db_sequel(sequel_connection, db_name, db_name + OLD_DB_SUFFIX)
-        rename_db_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, db_name)
+      if !replace_only_tables
+        # If the database name is the same as the default database name, we will restore the backup into a new database then rename it to the default database name
+        puts "You specified the same database as the origin one. Dump will replace original database"
+        drop_database_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX)
+        create_message = create_and_restore_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, db_password, backup_path)
+        sequel_connection.transaction do
+          rename_db_sequel(sequel_connection, db_name, db_name + OLD_DB_SUFFIX)
+          rename_db_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, db_name)
+        end
+        drop_database_sequel(sequel_connection, db_name + OLD_DB_SUFFIX)
+        message = "Creating DB message:\n#{create_message}\nSuccessfully restored dump into #{db_name}"
+      else
+        puts "Option \"replace_only_tables\" is used for current restore. Original database will be affected after that action"
+        replace_tables_in_original_db(db_url, backup_path, db_name)
       end
-      drop_database_sequel(sequel_connection, db_name + OLD_DB_SUFFIX)
-      message = "Creating DB message:\n#{create_message}\nSuccessfully restored dump into #{db_name}"
     else
-      # OLD PIPELINE
-      # Drop database if it exists
-      # drop_database(db_host, db_port, db_user, db_password, db_name)
-      # create_and_restore(db_host, db_port, db_user, db_name, backup_path) if db_name != default_db_name
-      # NEW PIPELINE
       drop_database_sequel(sequel_connection, db_name)
       create_message = create_and_restore_sequel(sequel_connection, db_name, db_password, backup_path)
       message = "Creating DB message:\n#{create_message}\nSuccessfully restored dump into #{db_name}"
@@ -98,50 +92,6 @@ def restore_by_dump(backup_path, database_name)
     message
   end
 end
-
-# def create_and_restore(db_host, db_port, db_user, db_name, backup_path)
-#   # Create database again
-#   puts "Creating fresh database #{db_name}..."
-#   create_cmd = ['createdb', '-h', db_host, '-U', db_user, db_name]
-#   create_cmd += ['-p', db_port] if db_port
-#   create_output, create_err, create_status = Open3.capture3(*create_cmd)
-#   puts "Database #{db_name} created" if create_status.success?
-#   unless create_status.success?
-#     raise "Database creation failed: #{create_err}"
-#   end
-#
-#   # Extract SQL file from backup .gz
-#   begin
-#     gzip_file_path = File.join(BACKUPS_DIR, backup_path)
-#     sql_file = File.join(BACKUPS_DIR, File.basename(backup_path, '.gz'))
-#     system("gzip -d #{gzip_file_path} -c > #{sql_file}")
-#     unless $?.success?
-#       raise "Error extracting SQL file from backup"
-#     end
-#     # Restore SQL file
-#     restore_cmd = ['psql', '-h', db_host]
-#     restore_cmd += ['-p', db_port] if db_port
-#     restore_cmd += ['-U', db_user, '-d', db_name, '-f', sql_file]
-#     puts "Restoring database..."
-#     restore_out, restore_err, restore_status = Open3.capture3(*restore_cmd)
-#
-#     if restore_status.success?
-#       message = "Database restored successfully"
-#       puts message
-#       return message
-#     else
-#       puts "Error restoring database: #{restore_err}"
-#       raise 'Error restoring database'
-#     end
-#   rescue Exception => e
-#     puts "Error restoring database: #{e.message}"
-#     raise e
-#   ensure
-#     # Remove the SQL file
-#     puts "Temporary SQL file removed"
-#     system("rm #{sql_file}")
-#   end
-# end
 
 def create_and_restore_sequel(sequel_connection, db_name, db_password, backup_path)
   # Create the database using SQL instead of createdb command
@@ -215,46 +165,6 @@ def create_and_restore_sequel(sequel_connection, db_name, db_password, backup_pa
   end
 end
 
-
-# def drop_database(db_host, db_port, db_user, db_password, db_name)
-#   db_url = nil
-#   admin_db_url = nil
-#   if db_port && !db_port.empty?
-#     db_url = "postgres://#{db_user}:#{db_password}@#{db_host}:#{db_port}/#{db_name}"
-#     admin_db_url = "postgres://#{db_user}:#{db_password}@#{db_host}:#{db_port}/postgres"
-#   else
-#     db_url = "postgres://#{db_user}:#{db_password}@#{db_host}/postgres"
-#     admin_db_url = "postgres://#{db_user}:#{db_password}@#{db_host}/#{db_name}"
-#   end
-#   puts "Dropping database #{db_name}... With options: db_host: #{db_host}, db_port: #{db_port}, db_user: #{db_user}"
-#   # Connect to 'postgres' so we can drop the target DB
-#   db = Sequel.connect(admin_db_url)
-#   begin
-#     db.transaction do
-#       # Terminate existing sessions
-#       puts "Terminating active connections to #{db_name}..."
-#       db.run(%Q(
-#         SELECT pg_terminate_backend(pid)
-#         FROM pg_stat_activity
-#         WHERE datname = '#{db_name}' AND pid <> pg_backend_pid();
-#       )) rescue nil
-#
-#       # Drop the database
-#       puts "Dropping database #{db_name}..."
-#       db.run("DROP DATABASE IF EXISTS #{db_name};")
-#     end
-#
-#     puts "Database #{db_name} dropped successfully."
-#   rescue => e
-#     raise "Failed to drop database #{db_name}:\n#{e.message}"
-#   ensure
-#     # Unlock database
-#     puts "Unlocking database #{db_name}..."
-#     db.run("ALTER DATABASE #{db_name} WITH ALLOW_CONNECTIONS true;") rescue nil
-#     db.disconnect
-#   end
-# end
-
 def drop_database_sequel(sequel_connection, db_name)
   # Terminate existing sessions
   puts "Terminating active connections to #{db_name}..."
@@ -268,46 +178,6 @@ def drop_database_sequel(sequel_connection, db_name)
   puts "Dropping database #{db_name}..."
   sequel_connection.run("DROP DATABASE IF EXISTS #{db_name};")
 end
-
-# def rename_db(db_host_port, db_user, db_password, db_name, db_name_new)
-#   db_url = "postgres://#{db_user}:#{db_password}@#{db_host_port}/#{db_name}"
-#
-#   puts "Renaming database #{db_name} to #{db_name_new}"
-#
-#   # Connect to the 'postgres' DB to manage the target DB
-#   db = Sequel.connect(db_url)
-#
-#   begin
-#     db.transaction do
-#       puts "Locking database #{db_name} against new connections..."
-#       db.run("ALTER DATABASE #{db_name} WITH ALLOW_CONNECTIONS false;")
-#
-#       puts "Terminating active connections to #{db_name}..."
-#       db.run(%Q(
-#         SELECT pg_terminate_backend(pid)
-#         FROM pg_stat_activity
-#         WHERE datname = '#{db_name}' AND pid <> pg_backend_pid();
-#       ))
-#
-#       puts "Renaming database #{db_name} to #{db_name_new}..."
-#       db.run("ALTER DATABASE #{db_name} RENAME TO #{db_name_new};")
-#     end
-#
-#     puts "Database #{db_name} successfully renamed to #{db_name_new}"
-#
-#   rescue => e
-#     raise "Database renaming failed:\n#{e.message}"
-#   ensure
-#     begin
-#       puts "Re-enabling connections to #{db_name_new}..."
-#       db.run("ALTER DATABASE #{db_name_new} WITH ALLOW_CONNECTIONS true;")
-#     rescue => e
-#       raise "Failed to unlock database:\n#{e.message}"
-#     ensure
-#       db.disconnect
-#     end
-#   end
-# end
 
 def rename_db_sequel(sequel_connection, db_name, db_name_new)
   begin
@@ -335,4 +205,96 @@ def rename_db_sequel(sequel_connection, db_name, db_name_new)
       raise "Failed to unlock database:\n#{e.message}"
     end
   end
+end
+
+def replace_tables_in_original_db(db_url, backup_path, db_name)
+  begin
+    gzip_file_path = backup_path
+    sql_file = File.join(File.dirname(backup_path), File.basename(backup_path, '.gz'))
+    new_db_connection = Sequel.connect(db_url)
+
+    # Step 1: Extract .gz file to .sql
+    puts "Extracting backup file #{backup_path}..."
+    system("gzip -d #{gzip_file_path} -c > #{sql_file}")
+    raise "Error extracting SQL file from backup" unless $?.success?
+
+    # Step 2: Extract table names from the SQL dump
+    sql_content = File.read(sql_file)
+    table_names = extract_table_names_from_sql(sql_content)
+
+    # Step 3: Clear each table using DELETE
+    puts "Clearing existing data from #{table_names.size} tables in #{db_name}..."
+    new_db_connection.transaction do
+      table_names.each do |table|
+        puts "Deleting from table #{table}..."
+        new_db_connection.run("DELETE FROM #{Sequel.lit(table)}")
+      end
+    end
+
+    # Step 4: Prepare data-only SQL file from COPY blocks
+    data_only_file = "#{sql_file}.dataonly.sql"
+    File.open(data_only_file, 'w') do |f|
+      f.puts "SET session_replication_role = replica;"  # Disable constraints
+
+      inside_copy = false
+      sql_content.each_line do |line|
+        if line =~ /^COPY\b/i
+          inside_copy = true
+          f.puts line
+        elsif inside_copy
+          f.puts line
+          inside_copy = false if line.strip == '\\.'
+        end
+      end
+
+      f.puts "SET session_replication_role = DEFAULT;"  # Re-enable constraints
+    end
+
+    # Step 5: Run the COPY data insert via psql
+    db_opts = new_db_connection.opts
+    db_host = db_opts[:host] || 'localhost'
+    db_port = db_opts[:port]
+    db_user = db_opts[:user]
+    db_password = db_opts[:password]
+
+    restore_cmd = ['psql', '-h', db_host, '-U', db_user, '-d', db_name]
+    restore_cmd += ['-p', db_port.to_s] if db_port
+
+    puts "Restoring data into #{db_name} (with constraints temporarily disabled)..."
+    env = { 'PGPASSWORD' => db_password.to_s }
+    stdout, stderr, status = Open3.capture3(env, *restore_cmd, stdin_data: File.read(data_only_file))
+    unless status.success?
+      puts "Restore failed:\nSTDERR: #{stderr[0,1000]}"
+      raise "psql restore failed"
+    end
+
+    message = "Tables #{table_names.join(', ')} replaced in #{db_name} successfully (constraints were temporarily disabled during restoring)"
+    puts message
+    message
+
+  rescue => e
+    puts "Exception occurred during restore: #{e.message}"
+    raise e
+
+  ensure
+    # Clean up temp files
+    [sql_file, "#{sql_file}.dataonly.sql"].each do |f|
+      if f && File.exist?(f)
+        puts "Removing temporary file #{f}..."
+        File.delete(f)
+      end
+    end
+
+    new_db_connection.disconnect if new_db_connection
+  end
+end
+
+# Utility: Extracts table names from CREATE TABLE statements
+def extract_table_names_from_sql(sql_content)
+  table_names = []
+  create_table_regex = /CREATE TABLE\s+(?:\w+\.)?"?(\w+)"?\s*\(/i
+  sql_content.scan(create_table_regex) do |match|
+    table_names << match[0]
+  end
+  table_names.uniq
 end

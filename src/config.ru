@@ -120,8 +120,10 @@ post '/restore-by-dump/*' do
   begin
     path_to_file = params[:splat][0]
     path_to_file = '/' + path_to_file if path_to_file[0] != '/'
-    database_name = JSON.parse(request.body.read)["database_name"]
-    message = restore_by_dump(path_to_file, database_name)
+    request_body = JSON.parse(request.body.read)
+    database_name = request_body["database_name"]
+    replace_only_tables = request_body["replace_only_tables"]
+    message = restore_by_dump(path_to_file, database_name, replace_only_tables)
 
     body = { status: "ok", message: message }
     [200, { 'Content-Type' => 'application/json' }, body.to_json]
