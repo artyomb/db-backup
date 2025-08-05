@@ -153,18 +153,18 @@ def create_and_restore_sequel(sequel_connection, db_name, db_password, backup_pa
     raise "Database creation failed: #{e.message}"
   end
 
-  # Connect to the newly created database and install postgis extention
-  new_db_url = sequel_connection.opts[:uri].sub(%r{/[^/]+$}, "/#{db_name}")
-  puts "Connecting to new database #{db_name} to install PostGIS..."
-  begin
-    new_db_connection = Sequel.connect(new_db_url)
-    new_db_connection.run("CREATE EXTENSION IF NOT EXISTS postgis;")
-    puts "PostGIS extension created successfully in #{db_name}."
-  rescue Sequel::DatabaseError => e
-    raise "Failed to create PostGIS extension: #{e.message}"
-  ensure
-    new_db_connection.disconnect if new_db_connection
-  end
+  # # Connect to the newly created database and install postgis extention
+  # new_db_url = sequel_connection.opts[:uri].sub(%r{/[^/]+$}, "/#{db_name}")
+  # puts "Connecting to new database #{db_name} to install PostGIS..."
+  # begin
+  #   new_db_connection = Sequel.connect(new_db_url)
+  #   new_db_connection.run("CREATE EXTENSION IF NOT EXISTS postgis;")
+  #   puts "PostGIS extension created successfully in #{db_name}."
+  # rescue Sequel::DatabaseError => e
+  #   raise "Failed to create PostGIS extension: #{e.message}"
+  # ensure
+  #   new_db_connection.disconnect if new_db_connection
+  # end
 
   # Extract and restore the backup
   begin

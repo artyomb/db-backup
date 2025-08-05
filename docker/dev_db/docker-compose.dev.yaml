@@ -9,20 +9,20 @@ services:
       - POSTGRES_USER=arinc
       - POSTGRES_PASSWORD=arinc
       - POSTGRES_DB=arinc
-  backup_service:
-    depends_on:
-      - arinc_db
-    build:
-      context: ../../src
-      dockerfile: ../docker/ruby/Dockerfile
-    volumes:
-      - ../../src/backups:/backups
-      - ../../src/uploaded_backups:/uploaded_backups
-    environment:
-      - DB_URL=postgres://arinc:arinc@arinc_db/arinc?sslmode=disable
-      - BACKUP_INTERVAL=60
-    ports:
-      - 7000:7000
+#  backup_service:
+#    depends_on:
+#      - arinc_db
+#    build:
+#      context: ../../src
+#      dockerfile: ../docker/ruby/Dockerfile
+#    volumes:
+#      - ../../src/backups:/backups
+#      - ../../src/uploaded_backups:/uploaded_backups
+#    environment:
+#      - DB_URL=postgres://arinc:arinc@arinc_db/arinc?sslmode=disable
+#      - BACKUP_INTERVAL=60
+#    ports:
+#      - 7000:7000
   pgweb:
     image: sosedoff/pgweb
     restart: always
