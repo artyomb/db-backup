@@ -129,17 +129,17 @@ def render_stats_and_content(content, stats, backup_name)
   html += '<table class="stats-table">'
   html += '<thead>'
   html += '<tr style="background-color: #efef97">'
-  html += "<td colspan=\"2\">Backup #{backup_name} stats</td>"
+  html += "<td style=\"text-align: center\" colspan=\"2\">Backup #{backup_name} stats</td>"
   html += '</tr>'
 
   html += '<tr>'
   html += '<td>Table name</td>'
-  html += '<td>Number of records</td>'
+  html += "<td style=\"text-align: right\">Number of records</td>"
   html += '</tr>'
   html += '</thead>'
   html += '<tbody>'
   stats.each do |stat|
-    html += "<tr><td>#{stat[:table_name]}</td><td>#{stat[:number_of_records]}</td></tr>"
+    html += "<tr><td>#{stat[:table_name]}</td><td style=\"text-align: right\">#{stat[:number_of_records]}</td></tr>"
   end
   html += '</tbody>'
   html += '</table>'

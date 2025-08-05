@@ -448,7 +448,6 @@ sass:
     padding-top: 0.75rem
     padding-bottom: 0.75rem
   .stats-table
-    text-align-last: center
     font-weight: bold
     border: 0.125rem solid black
     thead
@@ -459,7 +458,9 @@ div
     .margin-big.flex.align-items-center
       .font-weight-bold.margin-right Force backup
       .action-box-big.primary-action-background.text-align-center.align-content-center.margin-right-big.cursor-pointer.font-size-bigger onclick="callForceBackupDialog()"="▷"
-  h2.margin-bottom-big= ENV['TABLES'].nil? ? "All tables from database are stored" : "Following tables will be stored in backup: #{ENV['TABLES']}"
+  h2.margin-bottom-big= ENV['TABLES'].nil? ? "All tables from database are stored" : "Following tables will be stored in backup:"
+  h2.margin-bottom-big style="color: #d10dff"="#{ENV['TABLES'].split(" ").join(", ")}"
+  br
 h2 Latest DB backup status report (if message is too big, press ctrl+click to expand)
 - background_color = $last_backup_report[:status_code] == 0 ? '#d4edda' : '#f8d7da'
 .width-fit-content.white-space-pre.vertical-margin.overflow-x-auto.limit-max-width style="background-color: #{background_color}; padding: 0.5rem; border-radius: 0.5rem"
