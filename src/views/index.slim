@@ -38,6 +38,7 @@ ruby:
 javascript:
     let restoring_host_port = `#{{db_host_port.to_s}}`;
     let restoring_user = `#{{db_user}}`;
+    const UPLOADED_BACKUPS_DIR = `#{{UPLOADED_BACKUPS_DIR.to_s}}`;
     let char_limit = 100;
 
     function createConfirmationDialog(confirmationCallbackString, confirmationHTML) {
@@ -142,7 +143,7 @@ javascript:
             <input type="password" id="password" name="password" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="***" disabled>
             <label for="dbName">Database Name:</label>
             <input type="text" id="dbName" name="dbName" style="width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px;" value="${backupName.split('.')[0]}">
-            <input type="checkbox" id="replaceOnlyTablesCheckbox" name="replaceOnlyTablesCheckbox" value=>
+            <input type="checkbox" id="replaceOnlyTablesCheckbox" checked name="replaceOnlyTablesCheckbox" value=>
             <label for="replaceOnlyTablesCheckbox">Replace only tables data (inconsistency may appear)</label>
         </div>
         `;
@@ -235,37 +236,41 @@ javascript:
     }
 
 
+    async function showContentByClick(fileElement) {
+        fileElement.addEventListener("click", async function (event) {
+            const fileViewArea = document.getElementById("file-area");
+            if (event.target.classList.contains('restore-icon')) {
+                const iconElement = event.target;
+                const url = iconElement.dataset.href;
+                callRestoreDialog(url);
+                event.stopPropagation();
+                return;
+            }
+
+            console.log("Clicked on file element with data-href:", fileElement.dataset.href);
+            const url = fileElement.dataset.href;
+            try {
+                const response = await fetch(url);
+                const htmlContent = await response.text();
+                fileViewArea.style.opacity = 1;
+                fileViewArea.innerHTML = htmlContent;
+                fileViewArea.style.textAlign = "left";
+                document.querySelector(".chosen")?.classList.toggle("chosen");
+                fileElement.classList.toggle("chosen");
+                hljs.highlightElement(fileViewArea.querySelector("code"));
+            } catch (error) {
+                console.error("Error loading file content:", error);
+                fileViewArea.innerHTML = "Error loading file content";
+            }
+        });
+    }
 
 
     document.addEventListener("DOMContentLoaded", function() {
         const fileViewArea = document.getElementById("file-area");
 
         document.querySelectorAll(".file-element").forEach(async function(fileElement) {
-            fileElement.addEventListener("click", async function (event) {
-                if (event.target.classList.contains('restore-icon')) {
-                    const iconElement = event.target;
-                    const url = iconElement.dataset.href;
-                    callRestoreDialog(url);
-                    event.stopPropagation();
-                    return;
-                }
-
-                console.log("Clicked on file element with data-href:", fileElement.dataset.href);
-                const url = fileElement.dataset.href;
-                try {
-                    const response = await fetch(url);
-                    const htmlContent = await response.text();
-                    fileViewArea.style.opacity = 1;
-                    fileViewArea.innerHTML = htmlContent;
-                    fileViewArea.style.textAlign = "left";
-                    document.querySelector(".chosen")?.classList.toggle("chosen");
-                    fileElement.classList.toggle("chosen");
-                    hljs.highlightElement(fileViewArea.querySelector("code"));
-                } catch (error) {
-                    console.error("Error loading file content:", error);
-                    fileViewArea.innerHTML = "Error loading file content";
-                }
-            });
+            showContentByClick(fileElement);
         });
 
         document.querySelectorAll(".expandable-element").forEach(function(element) {
@@ -290,12 +295,7 @@ javascript:
             }
         });
 
-        document.querySelectorAll(".time").forEach(function(element) {
-            const timeString = element.innerHTML; // example "2025-04-23 09:59:41 +0300"
-            const date = new Date(timeString);
-            const options = { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' };
-            element.innerHTML = date.toLocaleString('en-US', options);
-        });
+        renderTime();
     });
 
     async function uploadDump() {
@@ -308,6 +308,7 @@ javascript:
 
         const file = fileInput.files[0];
         const filename = file.name;
+        const fileSizeFormatted = representSize(file.size);
 
         if (!filename.toLowerCase().endsWith('.sql') && !filename.toLowerCase().endsWith('.zip') && !filename.toLowerCase().endsWith('.rar') && !filename.toLowerCase().endsWith('.gz')) {
             showNotification(false, 'You are trying to upload file with unsupported extension');
@@ -330,6 +331,38 @@ javascript:
 
             if (response.status == 200) {
                 document.getElementById('fileInput').value = '';
+                const pathString = `${UPLOADED_BACKUPS_DIR}/${filename}`;
+                const backupTime = determineBackupTime(filename);
+                const tbody = document.getElementById('uploadedDumpsTable').querySelector('tbody');
+
+                // Create the new row as a DOM element
+                const newRow = document.createElement('tr');
+                newRow.className = 'file-element';
+                newRow.setAttribute('data-href', `file-in-archive/${pathString}`);
+                newRow.id = pathString;
+                newRow.innerHTML = `
+                    <td><span>${filename}</span></td>
+                    <td><span class="time float-right" data-date-time="${backupTime}"></span></td>
+                    <td><span class="float-right">${fileSizeFormatted}</span></td>
+                    <td>
+                        <span class="remove-icon text-align-center align-content-center action-box" onclick="callDeleteBackupDialog('${pathString}')">🗑️</span>
+                        <span class="restore-icon text-align-center align-content-center action-box" data-href="restore-by-dump/${pathString}">↺</span>
+                        <a class="download-icon text-align-center align-content-center action-box" download href="dumps/${pathString}">↓</a>
+                    </td>
+                `;
+
+                const uploadDumpRow = document.getElementById('uploadDumpRow');
+                const rows = Array.from(tbody.querySelectorAll('tr')).filter(
+                    row => row !== uploadDumpRow
+                );
+                tbody.innerHTML = '';
+                rows.forEach(row => tbody.appendChild(row));
+                tbody.appendChild(newRow);
+                showContentByClick(newRow);
+                if (uploadDumpRow) {
+                    tbody.appendChild(uploadDumpRow);
+                }
+                renderTime();
             }
         } catch (error) {
             showNotification(false, `An error occurred while sending the file: ${error.message}`);
@@ -473,7 +506,7 @@ h2 Latest DB backup status report (if message is too big, press ctrl+click to ex
   .vertical-margin-small
     span.font-weight-bold= 'Backup ended ' + (($last_backup_report[:status_code] == 0) ?'successfully' : 'with error')
     span= " at "
-    span.time.font-weight-bold= $last_backup_report[:time]
+    span.time.font-weight-bold data-date-time="#{$last_backup_report[:time]}"
   .vertical-margin-small
     span.font-weight-bold= "Backup command message:"
     span.expandable-element data-content="#{$last_backup_report[:message]}"
@@ -496,7 +529,7 @@ h2 Latest DB backup status report (if message is too big, press ctrl+click to ex
           .vertical-margin-small
             span.font-weight-bold= 'Rsync ended ' + ((rsync_report[:status_code] == 0) ? 'successfully' : 'with error')
             span= " at "
-            span.time.font-weight-bold= rsync_report[:time]
+            span.time.font-weight-bold data-date-time="#{rsync_report[:time]}"
           .vertical-margin-small
             span.font-weight-bold= "Backup command message:\n"
             span.expandable-element data-content="#{rsync_report[:message]}"
@@ -521,7 +554,7 @@ h2 Latest DB backup status report (if message is too big, press ctrl+click to ex
           - rescue => e
             - puts(e.message)
             - backup_time = "UNKNOWN"
-          span.time.float-right #{backup_time}
+          span.time.float-right data-date-time="#{backup_time}"
         td
           span.float-right #{represent_size(content[:size])}
         td
@@ -540,20 +573,18 @@ h3.margin-remove-top= "Total size: #{represent_size(structure[:size] + structure
           td.table-header.text-align-right= "Backup datetime"
           td.table-header.text-align-right= "Size"
           td.table-header style="width: 1%"= "Actions"
-      tbody
       - render_structure.call(structure)
     br
     h3 Externally loaded dumps
-    table.vertical-margin style="font-size: 1rem"
+    table.vertical-margin style="font-size: 1rem" id="uploadedDumpsTable"
       thead
         tr
           td.table-header= "Files"
           td.table-header.text-align-right= "Backup datetime"
           td.table-header.text-align-right= "Size"
           td.table-header style="width: 1%"= "Actions"
-      tbody
       - render_structure.call(structure_uploaded)
-      tr.disable-hover-change.upload-data-row
+      tr.disable-hover-change.upload-data-row id="uploadDumpRow"
         td.text-align-center.padding-vertical-small colspan="4"
           input type="file" id="fileInput"
           button.upload-dump-button id="uploadDumpButton" onclick="uploadDump()"= "Upload Dump"

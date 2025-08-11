@@ -1,3 +1,62 @@
+javascript:
+
+    function renderTime() {
+        document.querySelectorAll(".time").forEach(function (element) {
+            const timeString = element.dataset.dateTime; // example "2025-04-23 09:59:41 +0300"
+            const date = new Date(timeString);
+            const options = {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: 'numeric',
+                second: 'numeric'
+            };
+            element.innerHTML = date.toLocaleString('en-US', options);
+        });
+    }
+
+    function determineBackupTime(filename) {
+        const regex = /_(\d{8})_(\d{6})\./;
+        const match = filename.match(regex);
+
+        if (!match) {
+            return null; // Format does not match
+        }
+
+        const [, datePart, timePart] = match;
+
+        const year = datePart.slice(0, 4);
+        const month = datePart.slice(4, 6);
+        const day = datePart.slice(6, 8);
+        const hour = timePart.slice(0, 2);
+        const minute = timePart.slice(2, 4);
+        const second = timePart.slice(4, 6);
+
+        // Return formatted string: YYYY-MM-DD HH:MM:SS +0000
+        return `${year}-${month}-${day} ${hour}:${minute}:${second} +0000`;
+    }
+
+
+    function representSize(bytes) {
+        try {
+            const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+            if (bytes === 0) return '0 B';
+
+            let exp = Math.floor(Math.log(bytes) / Math.log(1024));
+            exp = Math.min(exp, units.length - 1);
+
+            const size = bytes / Math.pow(1024, exp);
+            return `${size.toFixed(2)} ${units[exp]}`;
+        } catch (e) {
+            console.error("Error in size representing:", e);
+            return '-';
+        }
+    }
+
+
+
+
 doctype html
 html
   head
