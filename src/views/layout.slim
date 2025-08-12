@@ -1,5 +1,66 @@
 javascript:
 
+    function listenSortBy(table) {
+        const uploadDataRow = table.querySelector('.upload-data-row');
+
+        // TODO: filter out column header element with known categoryString and add eventlistener for sorting for current table
+        table.querySelectorAll('.supported-for-sorting').forEach(elem => {
+            const categoryId = elem.dataset.sortingCategory;
+            elem.addEventListener('click', () => {
+                const tbody = table.querySelector('tbody');
+
+                const activeElement = table.querySelector('.sorting-active');
+                if (activeElement) {
+                    if (activeElement === elem) {
+                        elem.classList.toggle('descending');
+                    } else {
+                        activeElement.classList.remove('sorting-active');
+                        activeElement.classList.remove('descending');
+                        elem.classList.add('sorting-active');
+                    }
+                } else {
+                    elem.classList.add('sorting-active');
+                }
+
+                // Grab rows except the special one
+                const rows = Array.from(tbody.querySelectorAll('tr')).filter(
+                    row => row !== uploadDataRow
+                );
+
+                rows.sort((a, b) => {
+                    const valA = a.dataset[categoryId] || '';
+                    const valB = b.dataset[categoryId] || '';
+
+                    // Try date sort (normalize timezone +HHMM to +HH:MM)
+                    const dateA = Date.parse(valA.replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
+                    const dateB = Date.parse(valB.replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
+                    if (!isNaN(dateA) && !isNaN(dateB)) {
+                        return elem.classList.contains('descending') ? -(dateA - dateB) : dateA - dateB;
+                    }
+
+                    // Try number sort
+                    const numA = parseFloat(valA);
+                    const numB = parseFloat(valB);
+                    if (!isNaN(numA) && !isNaN(numB)) {
+                        return elem.classList.contains('descending') ? -(numA - numB) : numA - numB;
+                    }
+
+                    // Fallback to string sort
+                    return elem.classList.contains('descending') ? -(valA.localeCompare(valB)) : valA.localeCompare(valB);
+                });
+
+                // Empty tbody and rebuild in sorted order
+                tbody.innerHTML = '';
+                rows.forEach(row => tbody.appendChild(row));
+
+                // Always append the special row at the end
+                if (uploadDataRow) {
+                    tbody.appendChild(uploadDataRow);
+                }
+            });
+        });
+    }
+
     function renderTime() {
         document.querySelectorAll(".time").forEach(function (element) {
             const timeString = element.dataset.dateTime; // example "2025-04-23 09:59:41 +0300"

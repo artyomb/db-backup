@@ -294,7 +294,8 @@ javascript:
                 element.innerHTML = element.dataset.content;
             }
         });
-
+        listenSortBy(document.getElementById('storedDumpsTable'));
+        listenSortBy(document.getElementById('uploadedDumpsTable'));
         renderTime();
     });
 
@@ -370,6 +371,15 @@ javascript:
         btn.disabled = false;
     }
 sass:
+  .supported-for-sorting
+    background-color: #bcd4ff
+    border: 0.1rem solid
+    cursor: pointer
+    &:hover
+      background-color: #3a82ff
+
+  .sorting-active
+    background-color: #3a82ff
   .hdr-container
     padding-bottom: 1rem
     padding-right: 1rem
@@ -544,16 +554,16 @@ h2 Latest DB backup status report (if message is too big, press ctrl+click to ex
   - selected = structure&.select{|n, c| !(c.is_a?(Hash) && c[:is_dir]) && n != :size && c.is_a?(Hash) }
   - unless selected == nil
     - selected.sort_by { |name, _content| name }.reverse.each do |name, content|
-      tr.file-element data-href="file-in-archive/#{content[:path]}" id="#{content[:path]}"
+      - begin
+        - backup_time = determine_backup_time(name)
+      - rescue => e
+        - puts(e.message)
+        - backup_time = "UNKNOWN"
+      tr.file-element data-href="file-in-archive/#{content[:path]}" id="#{content[:path]}" data-file-name="#{name}" data-date-time="#{backup_time}" data-file-size="#{content[:size]}"
         td
           span
           = " #{name}"
         td
-          - begin
-            - backup_time = determine_backup_time(name)
-          - rescue => e
-            - puts(e.message)
-            - backup_time = "UNKNOWN"
           span.time.float-right data-date-time="#{backup_time}"
         td
           span.float-right #{represent_size(content[:size])}
@@ -566,23 +576,23 @@ h3.margin-remove-top= "Total size: #{represent_size(structure[:size] + structure
 .content-container
   .directory-structure-container
     h3= "Database \"#{default_db_name}\" dumps"
-    table.vertical-margin style="font-size: 1rem"
+    table.vertical-margin style="font-size: 1rem" id="storedDumpsTable"
       thead
-        tr
-          td.table-header= "Files"
-          td.table-header.text-align-right= "Backup datetime"
-          td.table-header.text-align-right= "Size"
-          td.table-header style="width: 1%"= "Actions"
+        tr.disable-hover-change
+          td.table-header.supported-for-sorting data-sorting-category="fileName"= "Files"
+          td.table-header.text-align-right.supported-for-sorting data-sorting-category="dateTime"= "Backup datetime"
+          td.table-header.text-align-right.supported-for-sorting data-sorting-category="fileSize"= "Size"
+          td.table-header.text-align-center style="width: 1%"= "Actions"
       - render_structure.call(structure)
     br
     h3 Externally loaded dumps
     table.vertical-margin style="font-size: 1rem" id="uploadedDumpsTable"
       thead
-        tr
-          td.table-header= "Files"
-          td.table-header.text-align-right= "Backup datetime"
-          td.table-header.text-align-right= "Size"
-          td.table-header style="width: 1%"= "Actions"
+        tr.disable-hover-change
+          td.table-header.supported-for-sorting data-sorting-category="fileName"= "Files"
+          td.table-header.text-align-right.supported-for-sorting data-sorting-category="dateTime"= "Backup datetime"
+          td.table-header.text-align-right.supported-for-sorting data-sorting-category="fileSize"= "Size"
+          td.table-header.text-align-center style="width: 1%"= "Actions"
       - render_structure.call(structure_uploaded)
       tr.disable-hover-change.upload-data-row id="uploadDumpRow"
         td.text-align-center.padding-vertical-small colspan="4"
