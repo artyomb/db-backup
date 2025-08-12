@@ -89,6 +89,26 @@ javascript:
     }
 
     function showNotification(isSuccess, notificationMessage) {
+        // Parse JSON if it looks like JSON
+        let displayMessage = notificationMessage;
+        try {
+            const parsed = typeof notificationMessage === "string"
+                ? JSON.parse(notificationMessage)
+                : notificationMessage;
+
+            if (parsed && typeof parsed === "object" && parsed.message) {
+                displayMessage = parsed.message;
+            }
+        } catch {
+            // Not JSON, leave as-is
+        }
+
+        // Replace escaped newlines with real ones for multi-line formatting
+        if (typeof displayMessage === "string") {
+            displayMessage = displayMessage.replace(/\\n/g, "\n");
+        }
+
+        // Create notification element
         const notification = document.createElement("div");
         document.querySelector(".dialog-overlay")?.remove();
         notification.className = `notification ${isSuccess ? 'success' : 'error'}`;
@@ -103,11 +123,18 @@ javascript:
             color: "white",
             boxShadow: "0 2px 5px rgba(0,0,0,0.2)",
             display: "flex",
-            alignItems: "center",
-            gap: "10px"
+            alignItems: "flex-start",
+            gap: "10px",
+            maxWidth: "600px",
+            whiteSpace: "pre-wrap", // Preserve newlines & wrapping
+            fontFamily: "monospace", // Easier to read logs
+            flexDirection: "row",
+            justifyContent: "center"
         });
+
         const messageSpan = document.createElement("span");
-        messageSpan.textContent = notificationMessage;
+        messageSpan.textContent = displayMessage;
+
         const closeButton = document.createElement("button");
         closeButton.innerHTML = "×";
         Object.assign(closeButton.style, {
@@ -116,9 +143,11 @@ javascript:
             color: "white",
             fontSize: "20px",
             cursor: "pointer",
-            padding: "0 5px"
+            padding: "0 10px",
+            lineHeight: "1"
         });
         closeButton.onclick = () => notification.remove();
+
         notification.appendChild(messageSpan);
         notification.appendChild(closeButton);
         document.body.appendChild(notification);

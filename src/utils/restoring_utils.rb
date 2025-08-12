@@ -69,6 +69,13 @@ def restore_by_dump(backup_path, database_name, replace_only_tables=false)
         puts "You specified the same database as the origin one. Dump will replace original database"
         drop_database_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX)
         create_message = create_and_restore_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, db_password, backup_path)
+        existing_tables = get_existing_tables(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX)
+        tables_in_backup = extract_tables_by_backup_path(backup_path)
+        not_existing_tables = tables_in_backup.select { |t| !existing_tables.include?(t) }
+        if not_existing_tables.size > 0
+          drop_database_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX)
+          raise "Couldn't restore database properly: tables (#{not_existing_tables.join(', ')}) were not created.\nCreating database by dump message:\n#{create_message}"
+        end
         sequel_connection.transaction do
           rename_db_sequel(sequel_connection, db_name, db_name + OLD_DB_SUFFIX)
           rename_db_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, db_name)
@@ -298,3 +305,51 @@ def extract_table_names_from_sql(sql_content)
   end
   table_names.uniq
 end
+
+def get_existing_tables(sequel_connection, db_name)
+  # Build a connection to the target DB using the same connection opts but with db_name replaced
+  db_opts = sequel_connection.opts.dup
+  db_opts[:database] = db_name
+
+  target_connection = Sequel.connect(db_opts)
+  begin
+    # Fetch table names from information_schema
+    rows = target_connection.fetch("
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_type = 'BASE TABLE'
+      ORDER BY table_name
+    ").map { |r| r[:table_name] }
+
+    rows
+  ensure
+    target_connection.disconnect
+  end
+end
+
+def extract_tables_by_backup_path(backup_path)
+  begin
+    gzip_file_path = backup_path
+    sql_file = File.join(File.dirname(backup_path), File.basename(backup_path, '.gz'))
+
+    # Step 1: Extract .gz file to .sql
+    puts "Extracting backup file #{backup_path}..."
+    system("gzip -d #{gzip_file_path} -c > #{sql_file}")
+    raise "Error extracting SQL file from backup" unless $?.success?
+
+    # Step 2: Extract table names from the SQL dump
+    sql_content = File.read(sql_file)
+    table_names = extract_table_names_from_sql(sql_content)
+  rescue => e
+    puts "Exception occurred during extracting tables from dump: #{e.message}"
+    raise e
+  ensure
+    if sql_file && File.exist?(sql_file)
+      puts "Removing temporary file #{sql_file}..."
+      File.delete(sql_file)
+    end
+  end
+  table_names
+end
+
