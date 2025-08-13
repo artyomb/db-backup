@@ -63,33 +63,27 @@ def restore_by_dump(backup_path, database_name, replace_only_tables=false)
   sequel_connection = Sequel.connect(admin_db_url)
   puts "Connection created with options #{sequel_connection.opts}"
   begin
-    if db_name == default_db_name
-      if !replace_only_tables
-        # If the database name is the same as the default database name, we will restore the backup into a new database then rename it to the default database name
-        puts "You specified the same database as the origin one. Dump will replace original database"
+    if !replace_only_tables
+      # If the database name is the same as the default database name, we will restore the backup into a new database then rename it to the default database name
+      puts "You specified the same database as the origin one. Dump will replace original database"
+      drop_database_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX)
+      create_message = create_and_restore_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, db_password, backup_path)
+      existing_tables = get_existing_tables(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX)
+      tables_in_backup = extract_tables_by_backup_path(backup_path)
+      not_existing_tables = tables_in_backup.select { |t| !existing_tables.include?(t) }
+      if not_existing_tables.size > 0
         drop_database_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX)
-        create_message = create_and_restore_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, db_password, backup_path)
-        existing_tables = get_existing_tables(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX)
-        tables_in_backup = extract_tables_by_backup_path(backup_path)
-        not_existing_tables = tables_in_backup.select { |t| !existing_tables.include?(t) }
-        if not_existing_tables.size > 0
-          drop_database_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX)
-          raise "Couldn't restore database properly: tables (#{not_existing_tables.join(', ')}) were not created.\nCreating database by dump message:\n#{create_message}"
-        end
-        sequel_connection.transaction do
-          rename_db_sequel(sequel_connection, db_name, db_name + OLD_DB_SUFFIX)
-          rename_db_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, db_name)
-        end
-        drop_database_sequel(sequel_connection, db_name + OLD_DB_SUFFIX)
-        message = "Creating DB message:\n#{create_message}\nSuccessfully restored dump into #{db_name}"
-      else
-        puts "Option \"replace_only_tables\" is used for current restore. Original database will be affected after that action"
-        replace_tables_in_original_db(db_url, backup_path, db_name)
+        raise "Couldn't restore database properly: tables (#{not_existing_tables.join(', ')}) were not created.\nCreating database by dump message:\n#{create_message}"
       end
-    else
-      drop_database_sequel(sequel_connection, db_name)
-      create_message = create_and_restore_sequel(sequel_connection, db_name, db_password, backup_path)
+      sequel_connection.transaction do
+        rename_db_sequel(sequel_connection, db_name, db_name + OLD_DB_SUFFIX) if database_exist?(sequel_connection, db_name)
+        rename_db_sequel(sequel_connection, db_name + RESTORE_IN_ORIGIN_DB_SUFFIX, db_name)
+      end
+      drop_database_sequel(sequel_connection, db_name + OLD_DB_SUFFIX)
       message = "Creating DB message:\n#{create_message}\nSuccessfully restored dump into #{db_name}"
+    else
+      puts "Option \"replace_only_tables\" is used for current restore. Original database will be affected after that action"
+      replace_tables_in_original_db(db_url, backup_path, db_name)
     end
   rescue => e
     message = "Failed to restore #{db_name}:\n#{e.message}"
@@ -258,8 +252,10 @@ def replace_tables_in_original_db(db_url, backup_path, db_name)
           f.puts line.sub(/^CREATE INDEX\b/i, 'CREATE INDEX IF NOT EXISTS')
         elsif line =~ /^CREATE UNIQUE INDEX\b/i
           f.puts line.sub(/^CREATE UNIQUE INDEX\b/i, 'CREATE UNIQUE INDEX IF NOT EXISTS')
+        elsif line =~ /^CREATE SEQUENCE\b/i
+          f.puts line.sub(/^CREATE SEQUENCE\b/i, 'CREATE SEQUENCE IF NOT EXISTS')
         # else
-          # skipped += line
+        # skipped += line
         end
       end
       f.puts "SET session_replication_role = DEFAULT;"  # Re-enable constraints
@@ -281,6 +277,30 @@ def replace_tables_in_original_db(db_url, backup_path, db_name)
     unless status.success?
       puts "Restore failed:\nSTDERR: #{stderr[0,1000]}"
       raise "psql restore failed"
+    end
+
+    # Step 6: Reset sequences for restored tables
+    table_names.each do |table|
+      begin
+        seq_sql = <<~SQL
+      SELECT pg_get_serial_sequence('#{table}', 'id') AS seq_name
+    SQL
+        seq_result = new_db_connection.fetch(seq_sql).first
+        next unless seq_result && seq_result[:seq_name]
+
+        seq_name = seq_result[:seq_name]
+        puts "Resetting sequence #{seq_name} for table #{table}..."
+        reset_sql = <<~SQL
+      SELECT setval(
+        '#{seq_name}',
+        COALESCE((SELECT MAX(id) FROM #{table}), 1),
+        true
+      );
+    SQL
+        new_db_connection.run(reset_sql)
+      rescue => seq_err
+        puts "Could not reset sequence for table #{table}: #{seq_err.message}"
+      end
     end
 
     message = "Tables #{table_names.join(', ')} replaced in #{db_name} successfully (constraints were temporarily disabled during restoring)"
@@ -361,3 +381,9 @@ def extract_tables_by_backup_path(backup_path)
   table_names
 end
 
+def database_exist?(admin_sequel_connection, database_name)
+  result = admin_sequel_connection.fetch(
+    "SELECT 1 FROM pg_database WHERE datname = ?", database_name
+  ).first
+  !result.nil?
+end
