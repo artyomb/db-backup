@@ -240,9 +240,9 @@ def replace_tables_in_original_db(db_url, backup_path, db_name)
 
     # Step 4: Prepare data-only SQL file from COPY blocks
     data_only_file = "#{sql_file}.dataonly.sql"
+    # skipped = ""
     File.open(data_only_file, 'w') do |f|
       f.puts "SET session_replication_role = replica;"  # Disable constraints
-
       inside_copy = false
       sql_content.each_line do |line|
         if line =~ /^COPY\b/i
@@ -253,12 +253,18 @@ def replace_tables_in_original_db(db_url, backup_path, db_name)
           inside_copy = false if line.strip == '\\.'
         elsif line =~ /^SELECT pg_catalog.setval\b/i
           f.puts line
+        elsif line =~ /^CREATE INDEX\b/i
+          # Rewrite to avoid duplicate index creation error
+          f.puts line.sub(/^CREATE INDEX\b/i, 'CREATE INDEX IF NOT EXISTS')
+        elsif line =~ /^CREATE UNIQUE INDEX\b/i
+          f.puts line.sub(/^CREATE UNIQUE INDEX\b/i, 'CREATE UNIQUE INDEX IF NOT EXISTS')
+        # else
+          # skipped += line
         end
       end
-
       f.puts "SET session_replication_role = DEFAULT;"  # Re-enable constraints
     end
-
+    # File.write("skipped_#{db_name}.txt", skipped)
     # Step 5: Run the COPY data insert via psql
     db_opts = new_db_connection.opts
     db_host = db_opts[:host] || 'localhost'
