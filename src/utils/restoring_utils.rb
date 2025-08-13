@@ -251,6 +251,8 @@ def replace_tables_in_original_db(db_url, backup_path, db_name)
         elsif inside_copy
           f.puts line
           inside_copy = false if line.strip == '\\.'
+        elsif line =~ /^SELECT pg_catalog.setval\b/i
+          f.puts line
         end
       end
 
