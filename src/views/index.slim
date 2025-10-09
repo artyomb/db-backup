@@ -242,6 +242,7 @@ javascript:
             notificationMessage = error.message;
         }
         showNotification(isSuccess, notificationMessage);
+        if (isSuccess) location.reload();
     }
 
     async function submitDeleteBackup(elementPath) {
