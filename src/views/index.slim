@@ -287,7 +287,8 @@ javascript:
                 fileViewArea.style.textAlign = "left";
                 document.querySelector(".chosen")?.classList.toggle("chosen");
                 fileElement.classList.toggle("chosen");
-                hljs.highlightElement(fileViewArea.querySelector("code"));
+                const codeElement = fileViewArea.querySelector("code");
+                if (codeElement != null) {hljs.highlightElement(codeElement);}
             } catch (error) {
                 console.error("Error loading file content:", error);
                 fileViewArea.innerHTML = "Error loading file content";
@@ -531,6 +532,8 @@ sass:
     border: 0.125rem solid black
     thead
       background-color: #fffacf
+  .text-error
+    color: #ff0000
 div
   .flex.justify-content-space-between
     h1.vertical-margin-big DB Backups

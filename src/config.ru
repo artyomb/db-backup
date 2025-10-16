@@ -19,13 +19,18 @@ BACKUPS_DIR = ENV['DEBUG'].nil? ? '/backups' : File.join(Dir.pwd, './backups')
 UPLOADED_BACKUPS_DIR = ENV['DEBUG'].nil? ? '/uploaded_backups' : File.join(Dir.pwd, './uploaded_backups')
 puts "All backups will be stored in #{BACKUPS_DIR}"
 
+
+STATUS_SUCCESS = "SUCCESS"
+STATUS_TOO_LARGE_FILE = "FILE IS TOO BIG"
+STATUS_ERROR = "ERROR"
+
 get '/', &-> { slim :index }
 get '/index', &-> { slim :index }
 get '/file-in-archive/*' do
   backup_path = params[:splat][0]
   backup_path = '/' + backup_path if backup_path[0] != '/'
-  content, stats = extract_sql_by_backup(backup_path)
-  render_stats_and_content(content, stats, backup_path.split('/').last)
+  content, stats, status = extract_sql_by_backup(backup_path)
+  render_stats_and_content(content, stats, backup_path.split('/').last, status:)
 end
 
 get '/dumps/*' do

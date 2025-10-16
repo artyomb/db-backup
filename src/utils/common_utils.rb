@@ -1,3 +1,5 @@
+DUMP_FILE_SIZE_LIMIT = 100 * 1024 * 1024
+
 def represent_size(bytes)
   begin
     # bytes.to_s.gsub(/(\d)(?=(\d{3})+(?!\d))/, '\\1,')
@@ -43,6 +45,9 @@ def extract_sql_by_backup(full_backup_path)
   begin
     gz_path = full_backup_path
     sql_content = nil
+    # Check if file size is bigeer then 50 Mb
+    raise "Dump file \"#{File.basename(full_backup_path)}\" is too big: #{represent_size(File.size(gz_path))} when limit for extracting content is #{represent_size(DUMP_FILE_SIZE_LIMIT)}" if File.size(gz_path) > DUMP_FILE_SIZE_LIMIT
+
 
     Zlib::GzipReader.open(gz_path) do |gz|
       sql_content = gz.read
@@ -50,11 +55,14 @@ def extract_sql_by_backup(full_backup_path)
     stats = extract_sql_stats(sql_content)
     puts "SQL content extracted successfully."
     content = sql_content.length > upper_limit ? sql_content[0..(upper_limit-1)] + "\n#{'*' * 150}\nYour content size is too big: #{sql_content.size} chars. It was reduced to #{upper_limit} characters\n#{'*' * 150}" : sql_content
-    return [content, stats]
+    status = STATUS_SUCCESS
   rescue Exception => e
-    puts "Error extracting SQL content: #{e}"
-    return nil
+    content = "Couldn't get sql content from backup:\n#{e}"
+    puts content
+    stats = nil
+    status = STATUS_ERROR
   end
+  [content, stats, status]
 end
 
 def extract_sql_stats(sql_content)
@@ -119,32 +127,37 @@ def determine_backup_time(filename)
   Time.new(year, month, day, hour, minute, second, "+00:00")
 end
 
-def render_stats_and_content(content, stats, backup_name)
+def render_stats_and_content(content, stats, backup_name, status: STATUS_ERROR)
   # extention = File.extname(backup_path).delete_prefix('.')
-  extention = 'sql'
+  class_line = 'language-sql' if status == STATUS_SUCCESS
+  class_line = 'text-error' if status == STATUS_ERROR
   escaped_content = CGI.escapeHTML(content)
 
   html = '<div style="display: flex;flex-direction: column">'
+  if status == STATUS_SUCCESS
+    html += '<table class="stats-table">'
+    html += '<thead>'
+    html += '<tr style="background-color: #efef97">'
+    html += "<td style=\"text-align: center\" colspan=\"2\">Backup #{backup_name} stats</td>"
+    html += '</tr>'
 
-  html += '<table class="stats-table">'
-  html += '<thead>'
-  html += '<tr style="background-color: #efef97">'
-  html += "<td style=\"text-align: center\" colspan=\"2\">Backup #{backup_name} stats</td>"
-  html += '</tr>'
+    html += '<tr>'
+    html += '<td>Table name</td>'
+    html += "<td style=\"text-align: right\">Number of records</td>"
+    html += '</tr>'
+    html += '</thead>'
+    html += '<tbody>'
+    stats.each do |stat|
+      html += "<tr><td>#{stat[:table_name]}</td><td style=\"text-align: right\">#{stat[:number_of_records]}</td></tr>"
+    end
+    html += '</tbody>'
+    html += '</table>'
+    html += "<code class='#{class_line}'>#{escaped_content}</code>"
 
-  html += '<tr>'
-  html += '<td>Table name</td>'
-  html += "<td style=\"text-align: right\">Number of records</td>"
-  html += '</tr>'
-  html += '</thead>'
-  html += '<tbody>'
-  stats.each do |stat|
-    html += "<tr><td>#{stat[:table_name]}</td><td style=\"text-align: right\">#{stat[:number_of_records]}</td></tr>"
+  elsif status == STATUS_ERROR
+    html += '<h3>Error when rendering backup content:</h3>'
+    html += "<p class='#{class_line}'>#{escaped_content.gsub(/\n/, '<br>')}</p>"
   end
-  html += '</tbody>'
-  html += '</table>'
-
-  html +="<code class='language-#{extention}'>#{escaped_content}</code>"
   html += '</div>'
   html
 end
